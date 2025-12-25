@@ -1,55 +1,66 @@
 package config
 
 import (
-	"io/ioutil"
-	"log"
-
-	"gopkg.in/yaml.v2"
+    "fmt"
+    "os"
+    "strconv"
+    "strings"
 )
 
-type DatabaseConfig struct {
-	Host     string `yaml:"host"`
-	Port     int    `yaml:"port"`
-	Username string `yaml:"username"`
-	Password string `yaml:"password"`
-	Name     string `yaml:"name"`
-}
-
-type ServerConfig struct {
-	Port int    `yaml:"port"`
-	Mode string `yaml:"mode"`
-}
-
 type AppConfig struct {
-	Database DatabaseConfig `yaml:"database"`
-	Server   ServerConfig   `yaml:"server"`
+    ServerPort int
+    DatabaseURL string
+    CacheEnabled bool
+    MaxConnections int
+    FeatureFlags map[string]bool
 }
 
-func LoadConfig(filePath string) (*AppConfig, error) {
-	data, err := ioutil.ReadFile(filePath)
-	if err != nil {
-		return nil, err
-	}
+func LoadConfig() (*AppConfig, error) {
+    cfg := &AppConfig{
+        FeatureFlags: make(map[string]bool),
+    }
 
-	var config AppConfig
-	err = yaml.Unmarshal(data, &config)
-	if err != nil {
-		return nil, err
-	}
+    portStr := getEnvWithDefault("SERVER_PORT", "8080")
+    port, err := strconv.Atoi(portStr)
+    if err != nil {
+        return nil, fmt.Errorf("invalid SERVER_PORT value: %v", err)
+    }
+    cfg.ServerPort = port
 
-	return &config, nil
+    dbURL := getEnvWithDefault("DATABASE_URL", "postgres://localhost:5432/appdb")
+    if !strings.HasPrefix(dbURL, "postgres://") {
+        return nil, fmt.Errorf("DATABASE_URL must start with postgres://")
+    }
+    cfg.DatabaseURL = dbURL
+
+    cacheEnabled := getEnvWithDefault("CACHE_ENABLED", "true")
+    cfg.CacheEnabled = strings.ToLower(cacheEnabled) == "true"
+
+    maxConnStr := getEnvWithDefault("MAX_CONNECTIONS", "100")
+    maxConn, err := strconv.Atoi(maxConnStr)
+    if err != nil || maxConn <= 0 {
+        return nil, fmt.Errorf("MAX_CONNECTIONS must be positive integer")
+    }
+    cfg.MaxConnections = maxConn
+
+    featureFlags := getEnvWithDefault("FEATURE_FLAGS", "")
+    if featureFlags != "" {
+        flags := strings.Split(featureFlags, ",")
+        for _, flag := range flags {
+            parts := strings.Split(strings.TrimSpace(flag), "=")
+            if len(parts) == 2 {
+                cfg.FeatureFlags[parts[0]] = strings.ToLower(parts[1]) == "true"
+            }
+        }
+    }
+
+    return cfg, nil
 }
 
-func ValidateConfig(config *AppConfig) bool {
-	if config.Database.Host == "" || config.Database.Port == 0 {
-		log.Println("Invalid database configuration")
-		return false
-	}
-
-	if config.Server.Port < 1 || config.Server.Port > 65535 {
-		log.Println("Invalid server port configuration")
-		return false
-	}
-
-	return true
+func getEnvWithDefault(key, defaultValue string) string {
+    value := os.Getenv(key)
+    if value == "" {
+        return defaultValue
+    }
+    return value
 }
