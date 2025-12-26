@@ -18,13 +18,13 @@ func Authenticate(next http.Handler) http.Handler {
 			return
 		}
 
-		tokenParts := strings.Split(authHeader, " ")
-		if len(tokenParts) != 2 || tokenParts[0] != "Bearer" {
+		parts := strings.Split(authHeader, " ")
+		if len(parts) != 2 || parts[0] != "Bearer" {
 			http.Error(w, "Invalid authorization format", http.StatusUnauthorized)
 			return
 		}
 
-		token := tokenParts[1]
+		token := parts[1]
 		userID, err := validateToken(token)
 		if err != nil {
 			http.Error(w, "Invalid token", http.StatusUnauthorized)
@@ -42,9 +42,12 @@ func GetUserID(ctx context.Context) (string, bool) {
 }
 
 func validateToken(token string) (string, error) {
-	// Simplified token validation - in production use proper JWT library
-	if token == "valid-token-123" {
-		return "user-456", nil
+	// In a real implementation, this would parse and verify JWT
+	// For this example, we'll simulate validation
+	if token == "" || len(token) < 10 {
+		return "", http.ErrAbortHandler
 	}
-	return "", http.ErrNoCookie
+	// Simulate extracting user ID from token
+	// In reality, this would come from JWT claims
+	return "user_" + token[:8], nil
 }
