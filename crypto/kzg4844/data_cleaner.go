@@ -1,47 +1,24 @@
 
 package main
 
-import (
-	"fmt"
-	"strings"
-)
+import "fmt"
 
-type DataCleaner struct {
-	Data []string
-}
+func RemoveDuplicates(nums []int) []int {
+	seen := make(map[int]bool)
+	result := []int{}
 
-func NewDataCleaner(data []string) *DataCleaner {
-	return &DataCleaner{Data: data}
-}
-
-func (dc *DataCleaner) RemoveDuplicates() []string {
-	seen := make(map[string]bool)
-	var result []string
-	for _, item := range dc.Data {
-		trimmed := strings.TrimSpace(item)
-		if trimmed == "" {
-			continue
-		}
-		if !seen[trimmed] {
-			seen[trimmed] = true
-			result = append(result, trimmed)
+	for _, num := range nums {
+		if !seen[num] {
+			seen[num] = true
+			result = append(result, num)
 		}
 	}
 	return result
 }
 
-func (dc *DataCleaner) Clean() []string {
-	cleaned := dc.RemoveDuplicates()
-	var final []string
-	for _, item := range cleaned {
-		final = append(final, strings.ToLower(item))
-	}
-	return final
-}
-
 func main() {
-	rawData := []string{"  Apple ", "banana", "  Apple", "Banana", "  ", "cherry"}
-	cleaner := NewDataCleaner(rawData)
-	cleanedData := cleaner.Clean()
-	fmt.Println("Cleaned data:", cleanedData)
+	input := []int{1, 2, 2, 3, 4, 4, 5, 1, 6}
+	cleaned := RemoveDuplicates(input)
+	fmt.Printf("Original: %v\n", input)
+	fmt.Printf("Cleaned: %v\n", cleaned)
 }
