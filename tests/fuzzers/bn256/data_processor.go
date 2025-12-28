@@ -107,4 +107,95 @@ func CalculateStatistics(records []DataRecord) (float64, float64, float64) {
 
 	average := sum / float64(len(records))
 	return average, min, max
+}package main
+
+import (
+	"errors"
+	"fmt"
+	"strings"
+	"time"
+)
+
+type DataRecord struct {
+	ID        string
+	Value     float64
+	Timestamp time.Time
+	Tags      []string
+}
+
+func ValidateRecord(record DataRecord) error {
+	if record.ID == "" {
+		return errors.New("ID cannot be empty")
+	}
+	if record.Value < 0 {
+		return errors.New("value must be non-negative")
+	}
+	if record.Timestamp.IsZero() {
+		return errors.New("timestamp must be set")
+	}
+	return nil
+}
+
+func TransformRecord(record DataRecord) DataRecord {
+	transformed := record
+	transformed.Value = record.Value * 1.1
+	transformed.Tags = append(record.Tags, "processed")
+	return transformed
+}
+
+func ProcessRecords(records []DataRecord) ([]DataRecord, error) {
+	var processed []DataRecord
+	for _, record := range records {
+		if err := ValidateRecord(record); err != nil {
+			return nil, fmt.Errorf("validation failed for record %s: %w", record.ID, err)
+		}
+		processed = append(processed, TransformRecord(record))
+	}
+	return processed, nil
+}
+
+func GenerateSummary(records []DataRecord) string {
+	if len(records) == 0 {
+		return "No records to summarize"
+	}
+	
+	var total float64
+	var tagCount int
+	for _, record := range records {
+		total += record.Value
+		tagCount += len(record.Tags)
+	}
+	
+	avg := total / float64(len(records))
+	return fmt.Sprintf("Processed %d records | Average value: %.2f | Total tags: %d", 
+		len(records), avg, tagCount)
+}
+
+func main() {
+	records := []DataRecord{
+		{
+			ID:        "rec001",
+			Value:     100.0,
+			Timestamp: time.Now(),
+			Tags:      []string{"source_a", "priority_high"},
+		},
+		{
+			ID:        "rec002",
+			Value:     250.5,
+			Timestamp: time.Now().Add(-1 * time.Hour),
+			Tags:      []string{"source_b"},
+		},
+	}
+
+	processed, err := ProcessRecords(records)
+	if err != nil {
+		fmt.Printf("Processing error: %v\n", err)
+		return
+	}
+
+	fmt.Println(GenerateSummary(processed))
+	for _, rec := range processed {
+		fmt.Printf("ID: %s, Value: %.2f, Tags: [%s]\n", 
+			rec.ID, rec.Value, strings.Join(rec.Tags, ", "))
+	}
 }
