@@ -1,50 +1,46 @@
 package middleware
 
 import (
-	"context"
+	"fmt"
 	"net/http"
 	"strings"
 )
 
-type contextKey string
-
-const userIDKey contextKey = "userID"
-
 type Authenticator struct {
-	tokenValidator func(string) (string, bool)
+	secretKey string
 }
 
-func NewAuthenticator(validator func(string) (string, bool)) *Authenticator {
-	return &Authenticator{tokenValidator: validator}
+func NewAuthenticator(secretKey string) *Authenticator {
+	return &Authenticator{secretKey: secretKey}
+}
+
+func (a *Authenticator) ValidateToken(token string) (bool, error) {
+	if token == "" {
+		return false, fmt.Errorf("empty token")
+	}
+	
+	if !strings.HasPrefix(token, "Bearer ") {
+		return false, fmt.Errorf("invalid token format")
+	}
+	
+	claims := strings.TrimPrefix(token, "Bearer ")
+	return a.validateClaims(claims), nil
+}
+
+func (a *Authenticator) validateClaims(claims string) bool {
+	return claims == a.secretKey
 }
 
 func (a *Authenticator) Middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		authHeader := r.Header.Get("Authorization")
-		if authHeader == "" {
-			http.Error(w, "Authorization header required", http.StatusUnauthorized)
+		token := r.Header.Get("Authorization")
+		valid, err := a.ValidateToken(token)
+		
+		if err != nil || !valid {
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
 			return
 		}
-
-		parts := strings.Split(authHeader, " ")
-		if len(parts) != 2 || strings.ToLower(parts[0]) != "bearer" {
-			http.Error(w, "Invalid authorization format", http.StatusUnauthorized)
-			return
-		}
-
-		token := parts[1]
-		userID, valid := a.tokenValidator(token)
-		if !valid {
-			http.Error(w, "Invalid or expired token", http.StatusUnauthorized)
-			return
-		}
-
-		ctx := context.WithValue(r.Context(), userIDKey, userID)
-		next.ServeHTTP(w, r.WithContext(ctx))
+		
+		next.ServeHTTP(w, r)
 	})
-}
-
-func GetUserID(ctx context.Context) (string, bool) {
-	userID, ok := ctx.Value(userIDKey).(string)
-	return userID, ok
 }
