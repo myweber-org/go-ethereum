@@ -122,4 +122,105 @@ func CalculateStatistics(records []Record) (float64, float64, int) {
 
     average := sum / float64(len(records))
     return average, max, activeCount
+}package main
+
+import (
+	"encoding/csv"
+	"errors"
+	"io"
+	"os"
+	"strconv"
+)
+
+type Record struct {
+	ID    int
+	Name  string
+	Value float64
+}
+
+func ReadCSVFile(filename string) ([]Record, error) {
+	file, err := os.Open(filename)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+
+	reader := csv.NewReader(file)
+	records := make([]Record, 0)
+
+	// Skip header
+	_, err = reader.Read()
+	if err != nil && err != io.EOF {
+		return nil, err
+	}
+
+	for {
+		row, err := reader.Read()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
+
+		if len(row) < 3 {
+			return nil, errors.New("invalid csv format")
+		}
+
+		id, err := strconv.Atoi(row[0])
+		if err != nil {
+			return nil, err
+		}
+
+		name := row[1]
+
+		value, err := strconv.ParseFloat(row[2], 64)
+		if err != nil {
+			return nil, err
+		}
+
+		records = append(records, Record{
+			ID:    id,
+			Name:  name,
+			Value: value,
+		})
+	}
+
+	return records, nil
+}
+
+func ValidateRecords(records []Record) error {
+	if len(records) == 0 {
+		return errors.New("no records found")
+	}
+
+	seenIDs := make(map[int]bool)
+	for _, record := range records {
+		if record.ID <= 0 {
+			return errors.New("invalid id: " + strconv.Itoa(record.ID))
+		}
+
+		if seenIDs[record.ID] {
+			return errors.New("duplicate id: " + strconv.Itoa(record.ID))
+		}
+		seenIDs[record.ID] = true
+
+		if record.Name == "" {
+			return errors.New("empty name for id: " + strconv.Itoa(record.ID))
+		}
+
+		if record.Value < 0 {
+			return errors.New("negative value for id: " + strconv.Itoa(record.ID))
+		}
+	}
+
+	return nil
+}
+
+func CalculateTotalValue(records []Record) float64 {
+	total := 0.0
+	for _, record := range records {
+		total += record.Value
+	}
+	return total
 }
