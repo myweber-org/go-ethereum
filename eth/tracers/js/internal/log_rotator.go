@@ -1,0 +1,124 @@
+
+package main
+
+import (
+	"fmt"
+	"io"
+	"os"
+	"path/filepath"
+	"sync"
+)
+
+type LogRotator struct {
+	mu           sync.Mutex
+	file         *os.File
+	basePath     string
+	maxSize      int64
+	currentSize  int64
+	rotationSeq  int
+}
+
+func NewLogRotator(basePath string, maxSizeMB int) (*LogRotator, error) {
+	maxSize := int64(maxSizeMB) * 1024 * 1024
+	
+	file, err := os.OpenFile(basePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		return nil, err
+	}
+	
+	info, err := file.Stat()
+	if err != nil {
+		file.Close()
+		return nil, err
+	}
+	
+	return &LogRotator{
+		file:        file,
+		basePath:    basePath,
+		maxSize:     maxSize,
+		currentSize: info.Size(),
+		rotationSeq: 0,
+	}, nil
+}
+
+func (lr *LogRotator) Write(p []byte) (int, error) {
+	lr.mu.Lock()
+	defer lr.mu.Unlock()
+	
+	if lr.currentSize+int64(len(p)) > lr.maxSize {
+		if err := lr.rotate(); err != nil {
+			return 0, err
+		}
+	}
+	
+	n, err := lr.file.Write(p)
+	if err == nil {
+		lr.currentSize += int64(n)
+	}
+	return n, err
+}
+
+func (lr *LogRotator) rotate() error {
+	if err := lr.file.Close(); err != nil {
+		return err
+	}
+	
+	lr.rotationSeq++
+	backupPath := fmt.Sprintf("%s.%d", lr.basePath, lr.rotationSeq)
+	
+	if err := os.Rename(lr.basePath, backupPath); err != nil {
+		return err
+	}
+	
+	file, err := os.OpenFile(lr.basePath, os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		return err
+	}
+	
+	lr.file = file
+	lr.currentSize = 0
+	
+	go lr.cleanOldLogs()
+	return nil
+}
+
+func (lr *LogRotator) cleanOldLogs() {
+	lr.mu.Lock()
+	defer lr.mu.Unlock()
+	
+	if lr.rotationSeq <= 3 {
+		return
+	}
+	
+	oldSeq := lr.rotationSeq - 3
+	oldPath := fmt.Sprintf("%s.%d", lr.basePath, oldSeq)
+	
+	if err := os.Remove(oldPath); err != nil && !os.IsNotExist(err) {
+		fmt.Fprintf(os.Stderr, "Failed to remove old log %s: %v\n", oldPath, err)
+	}
+}
+
+func (lr *LogRotator) Close() error {
+	lr.mu.Lock()
+	defer lr.mu.Unlock()
+	return lr.file.Close()
+}
+
+func main() {
+	rotator, err := NewLogRotator("app.log", 10)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to create log rotator: %v\n", err)
+		os.Exit(1)
+	}
+	defer rotator.Close()
+	
+	for i := 0; i < 100; i++ {
+		message := fmt.Sprintf("Log entry %d: This is a test log message\n", i)
+		if _, err := rotator.Write([]byte(message)); err != nil {
+			fmt.Fprintf(os.Stderr, "Write error: %v\n", err)
+			break
+		}
+	}
+	
+	fmt.Println("Log rotation test completed")
+}
