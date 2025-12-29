@@ -162,4 +162,140 @@ func main() {
         logger.Write([]byte(message))
         time.Sleep(10 * time.Millisecond)
     }
+}package main
+
+import (
+	"fmt"
+	"io"
+	"log"
+	"os"
+	"path/filepath"
+	"strings"
+	"sync"
+	"time"
+)
+
+const (
+	maxFileSize   = 10 * 1024 * 1024 // 10MB
+	backupCount   = 5
+	checkInterval = 30 * time.Second
+)
+
+type RotatingLogger struct {
+	mu         sync.Mutex
+	file       *os.File
+	filePath   string
+	currentPos int64
+}
+
+func NewRotatingLogger(path string) (*RotatingLogger, error) {
+	rl := &RotatingLogger{filePath: path}
+	if err := rl.openFile(); err != nil {
+		return nil, err
+	}
+	go rl.monitor()
+	return rl, nil
+}
+
+func (rl *RotatingLogger) openFile() error {
+	rl.mu.Lock()
+	defer rl.mu.Unlock()
+
+	if rl.file != nil {
+		rl.file.Close()
+	}
+
+	file, err := os.OpenFile(rl.filePath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+	if err != nil {
+		return err
+	}
+
+	stat, err := file.Stat()
+	if err != nil {
+		file.Close()
+		return err
+	}
+
+	rl.file = file
+	rl.currentPos = stat.Size()
+	return nil
+}
+
+func (rl *RotatingLogger) Write(p []byte) (n int, err error) {
+	rl.mu.Lock()
+	defer rl.mu.Unlock()
+
+	n, err = rl.file.Write(p)
+	if err == nil {
+		rl.currentPos += int64(n)
+	}
+	return n, err
+}
+
+func (rl *RotatingLogger) rotate() error {
+	rl.mu.Lock()
+	defer rl.mu.Unlock()
+
+	if rl.currentPos < maxFileSize {
+		return nil
+	}
+
+	rl.file.Close()
+
+	baseDir := filepath.Dir(rl.filePath)
+	baseName := filepath.Base(rl.filePath)
+	ext := filepath.Ext(baseName)
+	nameWithoutExt := strings.TrimSuffix(baseName, ext)
+
+	for i := backupCount - 1; i >= 0; i-- {
+		var src, dst string
+		if i == 0 {
+			src = rl.filePath
+		} else {
+			src = filepath.Join(baseDir, fmt.Sprintf("%s.%d%s", nameWithoutExt, i, ext))
+		}
+		dst = filepath.Join(baseDir, fmt.Sprintf("%s.%d%s", nameWithoutExt, i+1, ext))
+
+		if _, err := os.Stat(src); err == nil {
+			if i == backupCount-1 {
+				os.Remove(dst)
+			} else {
+				os.Rename(src, dst)
+			}
+		}
+	}
+
+	return rl.openFile()
+}
+
+func (rl *RotatingLogger) monitor() {
+	ticker := time.NewTicker(checkInterval)
+	defer ticker.Stop()
+
+	for range ticker.C {
+		if err := rl.rotate(); err != nil {
+			log.Printf("Rotation failed: %v", err)
+		}
+	}
+}
+
+func (rl *RotatingLogger) Close() error {
+	rl.mu.Lock()
+	defer rl.mu.Unlock()
+	return rl.file.Close()
+}
+
+func main() {
+	logger, err := NewRotatingLogger("app.log")
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer logger.Close()
+
+	customLog := log.New(io.MultiWriter(os.Stdout, logger), "", log.LstdFlags)
+
+	for i := 0; i < 100; i++ {
+		customLog.Printf("Log entry %d: %s", i, time.Now().Format(time.RFC3339))
+		time.Sleep(100 * time.Millisecond)
+	}
 }
