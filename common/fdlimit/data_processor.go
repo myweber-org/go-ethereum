@@ -1,49 +1,90 @@
+
 package main
 
 import (
-	"errors"
-	"regexp"
+	"encoding/csv"
+	"fmt"
+	"io"
+	"os"
 	"strings"
 )
 
-type UserData struct {
-	Email    string
-	Username string
-	Age      int
+type DataRecord struct {
+	ID      string
+	Name    string
+	Email   string
+	Active  string
 }
 
-var emailRegex = regexp.MustCompile(`^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$`)
-
-func ValidateUserData(data UserData) error {
-	if strings.TrimSpace(data.Email) == "" {
-		return errors.New("email cannot be empty")
-	}
-	if !emailRegex.MatchString(data.Email) {
-		return errors.New("invalid email format")
-	}
-	if len(data.Username) < 3 || len(data.Username) > 20 {
-		return errors.New("username must be between 3 and 20 characters")
-	}
-	if data.Age < 18 || data.Age > 120 {
-		return errors.New("age must be between 18 and 120")
-	}
-	return nil
-}
-
-func TransformUsername(username string) string {
-	return strings.ToLower(strings.TrimSpace(username))
-}
-
-func ProcessUserInput(email, username string, age int) (UserData, error) {
-	transformedUsername := TransformUsername(username)
-	userData := UserData{
-		Email:    strings.TrimSpace(email),
-		Username: transformedUsername,
-		Age:      age,
-	}
-	err := ValidateUserData(userData)
+func ProcessCSVFile(filename string) ([]DataRecord, error) {
+	file, err := os.Open(filename)
 	if err != nil {
-		return UserData{}, err
+		return nil, fmt.Errorf("failed to open file: %w", err)
 	}
-	return userData, nil
+	defer file.Close()
+
+	reader := csv.NewReader(file)
+	reader.TrimLeadingSpace = true
+
+	var records []DataRecord
+	headerSkipped := false
+
+	for {
+		row, err := reader.Read()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return nil, fmt.Errorf("csv read error: %w", err)
+		}
+
+		if !headerSkipped {
+			headerSkipped = true
+			continue
+		}
+
+		if len(row) < 4 {
+			continue
+		}
+
+		record := DataRecord{
+			ID:     strings.TrimSpace(row[0]),
+			Name:   strings.TrimSpace(row[1]),
+			Email:  strings.TrimSpace(row[2]),
+			Active: strings.TrimSpace(row[3]),
+		}
+
+		if isValidRecord(record) {
+			records = append(records, record)
+		}
+	}
+
+	return records, nil
+}
+
+func isValidRecord(record DataRecord) bool {
+	if record.ID == "" || record.Name == "" {
+		return false
+	}
+	if !strings.Contains(record.Email, "@") {
+		return false
+	}
+	return record.Active == "true" || record.Active == "false"
+}
+
+func FilterActiveRecords(records []DataRecord) []DataRecord {
+	var active []DataRecord
+	for _, r := range records {
+		if r.Active == "true" {
+			active = append(active, r)
+		}
+	}
+	return active
+}
+
+func GenerateReport(records []DataRecord) {
+	fmt.Printf("Total records processed: %d\n", len(records))
+	active := FilterActiveRecords(records)
+	fmt.Printf("Active records: %d\n", len(active))
+	fmt.Printf("Inactive records: %d\n", len(records)-len(active))
 }
