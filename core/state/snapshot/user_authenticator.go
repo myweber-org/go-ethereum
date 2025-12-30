@@ -4,13 +4,25 @@ import (
 	"context"
 	"net/http"
 	"strings"
+
+	"github.com/golang-jwt/jwt/v5"
 )
 
 type contextKey string
 
 const userIDKey contextKey = "userID"
 
-func Authenticate(next http.Handler) http.Handler {
+type AuthMiddleware struct {
+	secretKey []byte
+}
+
+func NewAuthMiddleware(secretKey string) *AuthMiddleware {
+	return &AuthMiddleware{
+		secretKey: []byte(secretKey),
+	}
+}
+
+func (m *AuthMiddleware) Authenticate(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		authHeader := r.Header.Get("Authorization")
 		if authHeader == "" {
@@ -24,25 +36,34 @@ func Authenticate(next http.Handler) http.Handler {
 			return
 		}
 
-		tokenString := parts[1]
-		userID, err := validateToken(tokenString)
-		if err != nil {
+		tokenStr := parts[1]
+		token, err := jwt.Parse(tokenStr, func(token *jwt.Token) (interface{}, error) {
+			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+				return nil, jwt.ErrSignatureInvalid
+			}
+			return m.secretKey, nil
+		})
+
+		if err != nil || !token.Valid {
 			http.Error(w, "Invalid token", http.StatusUnauthorized)
+			return
+		}
+
+		claims, ok := token.Claims.(jwt.MapClaims)
+		if !ok {
+			http.Error(w, "Invalid token claims", http.StatusUnauthorized)
+			return
+		}
+
+		userID, ok := claims["userID"].(string)
+		if !ok {
+			http.Error(w, "User ID not found in token", http.StatusUnauthorized)
 			return
 		}
 
 		ctx := context.WithValue(r.Context(), userIDKey, userID)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
-}
-
-func validateToken(tokenString string) (string, error) {
-	// In a real implementation, this would parse and validate a JWT
-	// For this example, we'll use a simple mock validation
-	if tokenString == "valid_token_123" {
-		return "user_456", nil
-	}
-	return "", http.ErrAbortHandler
 }
 
 func GetUserID(ctx context.Context) (string, bool) {
