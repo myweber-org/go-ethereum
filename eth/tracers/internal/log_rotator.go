@@ -190,3 +190,152 @@ func (l *RotatingLogger) Close() error {
     }
     return nil
 }
+package main
+
+import (
+	"fmt"
+	"io"
+	"log"
+	"os"
+	"path/filepath"
+	"strings"
+	"sync"
+	"time"
+)
+
+type RotatingLogger struct {
+	mu           sync.Mutex
+	basePath     string
+	currentFile  *os.File
+	maxSize      int64
+	currentSize  int64
+	backupCount  int
+	compressOld  bool
+}
+
+func NewRotatingLogger(basePath string, maxSizeMB int, backupCount int, compressOld bool) (*RotatingLogger, error) {
+	absPath, err := filepath.Abs(basePath)
+	if err != nil {
+		return nil, err
+	}
+
+	rl := &RotatingLogger{
+		basePath:    absPath,
+		maxSize:     int64(maxSizeMB) * 1024 * 1024,
+		backupCount: backupCount,
+		compressOld: compressOld,
+	}
+
+	if err := rl.rotateIfNeeded(); err != nil {
+		return nil, err
+	}
+
+	return rl, nil
+}
+
+func (rl *RotatingLogger) Write(p []byte) (n int, err error) {
+	rl.mu.Lock()
+	defer rl.mu.Unlock()
+
+	if err := rl.rotateIfNeeded(); err != nil {
+		return 0, err
+	}
+
+	n, err = rl.currentFile.Write(p)
+	rl.currentSize += int64(n)
+	return n, err
+}
+
+func (rl *RotatingLogger) rotateIfNeeded() error {
+	if rl.currentFile == nil || rl.currentSize >= rl.maxSize {
+		return rl.performRotation()
+	}
+	return nil
+}
+
+func (rl *RotatingLogger) performRotation() error {
+	if rl.currentFile != nil {
+		rl.currentFile.Close()
+		rl.manageBackups()
+	}
+
+	file, err := os.OpenFile(rl.basePath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+	if err != nil {
+		return err
+	}
+
+	info, err := file.Stat()
+	if err != nil {
+		file.Close()
+		return err
+	}
+
+	rl.currentFile = file
+	rl.currentSize = info.Size()
+	return nil
+}
+
+func (rl *RotatingLogger) manageBackups() {
+	for i := rl.backupCount - 1; i >= 0; i-- {
+		srcPath := rl.getBackupPath(i)
+		dstPath := rl.getBackupPath(i + 1)
+
+		if i == rl.backupCount-1 {
+			os.Remove(dstPath)
+			continue
+		}
+
+		if _, err := os.Stat(srcPath); err == nil {
+			os.Rename(srcPath, dstPath)
+			if rl.compressOld && i == 0 {
+				go rl.compressFile(dstPath)
+			}
+		}
+	}
+
+	os.Rename(rl.basePath, rl.getBackupPath(0))
+}
+
+func (rl *RotatingLogger) getBackupPath(index int) string {
+	if index == 0 {
+		return rl.basePath + ".1"
+	}
+	return fmt.Sprintf("%s.%d", rl.basePath, index+1)
+}
+
+func (rl *RotatingLogger) compressFile(path string) {
+	if !strings.HasSuffix(path, ".gz") {
+		compressedPath := path + ".gz"
+		// In production, use actual compression here
+		// This is a placeholder for compression logic
+		fmt.Printf("Would compress %s to %s\n", path, compressedPath)
+		os.Remove(path)
+	}
+}
+
+func (rl *RotatingLogger) Close() error {
+	rl.mu.Lock()
+	defer rl.mu.Unlock()
+
+	if rl.currentFile != nil {
+		return rl.currentFile.Close()
+	}
+	return nil
+}
+
+func main() {
+	logger, err := NewRotatingLogger("app.log", 10, 5, true)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer logger.Close()
+
+	customLog := log.New(logger, "ROTATING: ", log.LstdFlags)
+
+	for i := 0; i < 1000; i++ {
+		customLog.Printf("Log entry number %d at %v", i, time.Now())
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	fmt.Println("Log rotation demonstration completed")
+}
