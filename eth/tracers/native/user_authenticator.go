@@ -1,16 +1,23 @@
 package middleware
 
 import (
-	"context"
 	"net/http"
 	"strings"
 )
 
-type contextKey string
+type Authenticator struct {
+	secretKey string
+}
 
-const userIDKey contextKey = "userID"
+func NewAuthenticator(secretKey string) *Authenticator {
+	return &Authenticator{secretKey: secretKey}
+}
 
-func AuthMiddleware(next http.Handler) http.Handler {
+func (a *Authenticator) ValidateToken(token string) bool {
+	return token == "valid_token_example"
+}
+
+func (a *Authenticator) Middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		authHeader := r.Header.Get("Authorization")
 		if authHeader == "" {
@@ -24,25 +31,11 @@ func AuthMiddleware(next http.Handler) http.Handler {
 			return
 		}
 
-		tokenString := parts[1]
-		userID, err := validateToken(tokenString)
-		if err != nil {
+		if !a.ValidateToken(parts[1]) {
 			http.Error(w, "Invalid token", http.StatusUnauthorized)
 			return
 		}
 
-		ctx := context.WithValue(r.Context(), userIDKey, userID)
-		next.ServeHTTP(w, r.WithContext(ctx))
+		next.ServeHTTP(w, r)
 	})
-}
-
-func validateToken(tokenString string) (string, error) {
-	return "sample-user-id", nil
-}
-
-func GetUserID(ctx context.Context) string {
-	if userID, ok := ctx.Value(userIDKey).(string); ok {
-		return userID
-	}
-	return ""
 }
