@@ -1,5 +1,5 @@
 
-package main
+package data
 
 import (
 	"errors"
@@ -7,56 +7,50 @@ import (
 	"strings"
 )
 
-type UserProfile struct {
-	ID        string
-	Email     string
-	Username  string
-	Age       int
-	Active    bool
+type Record struct {
+	ID    string
+	Email string
+	Score int
 }
 
-func ValidateEmail(email string) error {
-	pattern := `^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$`
-	matched, err := regexp.MatchString(pattern, email)
-	if err != nil {
-		return err
+var emailRegex = regexp.MustCompile(`^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$`)
+
+func ValidateRecord(r Record) error {
+	if r.ID == "" {
+		return errors.New("ID cannot be empty")
 	}
-	if !matched {
+	if !emailRegex.MatchString(r.Email) {
 		return errors.New("invalid email format")
+	}
+	if r.Score < 0 || r.Score > 100 {
+		return errors.New("score must be between 0 and 100")
 	}
 	return nil
 }
 
-func NormalizeUsername(username string) string {
-	return strings.ToLower(strings.TrimSpace(username))
+func NormalizeEmail(email string) string {
+	return strings.ToLower(strings.TrimSpace(email))
 }
 
-func TransformProfile(profile UserProfile) (UserProfile, error) {
-	if err := ValidateEmail(profile.Email); err != nil {
-		return profile, err
-	}
-
-	profile.Username = NormalizeUsername(profile.Username)
-
-	if profile.Age < 0 || profile.Age > 150 {
-		return profile, errors.New("age out of valid range")
-	}
-
-	return profile, nil
-}
-
-func ProcessProfiles(profiles []UserProfile) ([]UserProfile, []error) {
-	var processed []UserProfile
-	var errs []error
-
-	for _, profile := range profiles {
-		transformed, err := TransformProfile(profile)
-		if err != nil {
-			errs = append(errs, err)
-			continue
+func TransformRecords(records []Record) ([]Record, error) {
+	var validRecords []Record
+	for _, r := range records {
+		r.Email = NormalizeEmail(r.Email)
+		if err := ValidateRecord(r); err != nil {
+			return nil, err
 		}
-		processed = append(processed, transformed)
+		validRecords = append(validRecords, r)
 	}
+	return validRecords, nil
+}
 
-	return processed, errs
+func CalculateAverageScore(records []Record) float64 {
+	if len(records) == 0 {
+		return 0.0
+	}
+	total := 0
+	for _, r := range records {
+		total += r.Score
+	}
+	return float64(total) / float64(len(records))
 }
