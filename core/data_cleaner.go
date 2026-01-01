@@ -1,0 +1,63 @@
+package main
+
+import (
+	"fmt"
+	"strings"
+)
+
+type DataRecord struct {
+	ID    int
+	Email string
+	Valid bool
+}
+
+func RemoveDuplicates(records []DataRecord) []DataRecord {
+	seen := make(map[string]bool)
+	var unique []DataRecord
+	for _, record := range records {
+		if !seen[record.Email] {
+			seen[record.Email] = true
+			unique = append(unique, record)
+		}
+	}
+	return unique
+}
+
+func ValidateEmails(records []DataRecord) []DataRecord {
+	var validated []DataRecord
+	for _, record := range records {
+		record.Valid = strings.Contains(record.Email, "@") && strings.Contains(record.Email, ".")
+		validated = append(validated, record)
+	}
+	return validated
+}
+
+func PrintRecords(records []DataRecord) {
+	for _, record := range records {
+		status := "INVALID"
+		if record.Valid {
+			status = "VALID"
+		}
+		fmt.Printf("ID: %d, Email: %s, Status: %s\n", record.ID, record.Email, status)
+	}
+}
+
+func main() {
+	records := []DataRecord{
+		{1, "user@example.com", false},
+		{2, "invalid-email", false},
+		{3, "user@example.com", false},
+		{4, "another@test.org", false},
+	}
+
+	fmt.Println("Original records:")
+	PrintRecords(records)
+
+	uniqueRecords := RemoveDuplicates(records)
+	fmt.Println("\nAfter deduplication:")
+	PrintRecords(uniqueRecords)
+
+	validatedRecords := ValidateEmails(uniqueRecords)
+	fmt.Println("\nAfter validation:")
+	PrintRecords(validatedRecords)
+}
