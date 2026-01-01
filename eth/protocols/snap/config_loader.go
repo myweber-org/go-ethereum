@@ -96,4 +96,115 @@ func DefaultConfigPath() string {
     }
     
     return ""
+}package config
+
+import (
+	"os"
+	"path/filepath"
+	"strings"
+
+	"gopkg.in/yaml.v2"
+)
+
+type DatabaseConfig struct {
+	Host     string `yaml:"host" env:"DB_HOST"`
+	Port     int    `yaml:"port" env:"DB_PORT"`
+	Username string `yaml:"username" env:"DB_USER"`
+	Password string `yaml:"password" env:"DB_PASS"`
+	Name     string `yaml:"name" env:"DB_NAME"`
+}
+
+type ServerConfig struct {
+	Port         int    `yaml:"port" env:"SERVER_PORT"`
+	ReadTimeout  int    `yaml:"read_timeout" env:"READ_TIMEOUT"`
+	WriteTimeout int    `yaml:"write_timeout" env:"WRITE_TIMEOUT"`
+	DebugMode    bool   `yaml:"debug_mode" env:"DEBUG_MODE"`
+	LogLevel     string `yaml:"log_level" env:"LOG_LEVEL"`
+}
+
+type AppConfig struct {
+	Database DatabaseConfig `yaml:"database"`
+	Server   ServerConfig   `yaml:"server"`
+	Features []string       `yaml:"features"`
+}
+
+func LoadConfig(configPath string) (*AppConfig, error) {
+	absPath, err := filepath.Abs(configPath)
+	if err != nil {
+		return nil, err
+	}
+
+	data, err := os.ReadFile(absPath)
+	if err != nil {
+		return nil, err
+	}
+
+	var config AppConfig
+	if err := yaml.Unmarshal(data, &config); err != nil {
+		return nil, err
+	}
+
+	overrideWithEnvVars(&config)
+
+	return &config, nil
+}
+
+func overrideWithEnvVars(config *AppConfig) {
+	overrideStruct(config, "")
+}
+
+func overrideStruct(s interface{}, prefix string) {
+	v := reflect.ValueOf(s).Elem()
+	t := v.Type()
+
+	for i := 0; i < v.NumField(); i++ {
+		field := v.Field(i)
+		fieldType := t.Field(i)
+
+		envTag := fieldType.Tag.Get("env")
+		yamlTag := fieldType.Tag.Get("yaml")
+
+		if envTag != "" && field.CanSet() {
+			if envValue := os.Getenv(envTag); envValue != "" {
+				setFieldValue(field, envValue)
+			}
+		}
+
+		if field.Kind() == reflect.Struct {
+			newPrefix := prefix
+			if yamlTag != "" {
+				newPrefix = strings.TrimSuffix(prefix+"_"+strings.ToUpper(yamlTag), "_")
+			}
+			overrideStruct(field.Addr().Interface(), newPrefix)
+		}
+	}
+}
+
+func setFieldValue(field reflect.Value, value string) {
+	switch field.Kind() {
+	case reflect.String:
+		field.SetString(value)
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		if intValue, err := strconv.ParseInt(value, 10, 64); err == nil {
+			field.SetInt(intValue)
+		}
+	case reflect.Bool:
+		if boolValue, err := strconv.ParseBool(value); err == nil {
+			field.SetBool(boolValue)
+		}
+	case reflect.Slice:
+		if field.Type().Elem().Kind() == reflect.String {
+			items := strings.Split(value, ",")
+			field.Set(reflect.ValueOf(items))
+		}
+	}
+}
+
+func SaveConfig(config *AppConfig, configPath string) error {
+	data, err := yaml.Marshal(config)
+	if err != nil {
+		return err
+	}
+
+	return os.WriteFile(configPath, data, 0644)
 }
