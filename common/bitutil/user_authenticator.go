@@ -42,8 +42,8 @@ func GetUserID(ctx context.Context) (string, bool) {
 }
 
 func validateToken(token string) (string, error) {
-    // Implementation would verify JWT signature and extract claims
-    // For demonstration, assume token validation succeeds
+    // Implementation would verify JWT signature and extract user ID
+    // This is a simplified placeholder
     if token == "" {
         return "", http.ErrNoCookie
     }
