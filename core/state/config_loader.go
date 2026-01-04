@@ -1,58 +1,57 @@
 package config
 
 import (
-    "fmt"
-    "os"
-    "path/filepath"
-
-    "gopkg.in/yaml.v2"
+	"errors"
+	"os"
+	"strconv"
+	"strings"
 )
 
-type DatabaseConfig struct {
-    Host     string `yaml:"host" env:"DB_HOST"`
-    Port     int    `yaml:"port" env:"DB_PORT"`
-    Username string `yaml:"username" env:"DB_USER"`
-    Password string `yaml:"password" env:"DB_PASS"`
-    Name     string `yaml:"name" env:"DB_NAME"`
-}
-
-type ServerConfig struct {
-    Port         int    `yaml:"port" env:"SERVER_PORT"`
-    ReadTimeout  int    `yaml:"read_timeout" env:"SERVER_READ_TIMEOUT"`
-    WriteTimeout int    `yaml:"write_timeout" env:"SERVER_WRITE_TIMEOUT"`
-    DebugMode    bool   `yaml:"debug_mode" env:"SERVER_DEBUG"`
-}
-
 type AppConfig struct {
-    Database DatabaseConfig `yaml:"database"`
-    Server   ServerConfig   `yaml:"server"`
-    Version  string         `yaml:"version"`
+	ServerPort int
+	DebugMode  bool
+	DatabaseURL string
+	CacheTTL   int
 }
 
-func LoadConfig(configPath string) (*AppConfig, error) {
-    var config AppConfig
+func LoadConfig() (*AppConfig, error) {
+	cfg := &AppConfig{}
+	var errs []string
 
-    absPath, err := filepath.Abs(configPath)
-    if err != nil {
-        return nil, fmt.Errorf("failed to resolve config path: %w", err)
-    }
+	portStr := os.Getenv("SERVER_PORT")
+	if portStr == "" {
+		portStr = "8080"
+	}
+	port, err := strconv.Atoi(portStr)
+	if err != nil {
+		errs = append(errs, "invalid SERVER_PORT value")
+	} else {
+		cfg.ServerPort = port
+	}
 
-    data, err := os.ReadFile(absPath)
-    if err != nil {
-        return nil, fmt.Errorf("failed to read config file: %w", err)
-    }
+	debugStr := os.Getenv("DEBUG_MODE")
+	cfg.DebugMode = strings.ToLower(debugStr) == "true"
 
-    if err := yaml.Unmarshal(data, &config); err != nil {
-        return nil, fmt.Errorf("failed to parse YAML config: %w", err)
-    }
+	dbURL := os.Getenv("DATABASE_URL")
+	if dbURL == "" {
+		errs = append(errs, "DATABASE_URL is required")
+	}
+	cfg.DatabaseURL = dbURL
 
-    loadFromEnv(&config.Database)
-    loadFromEnv(&config.Server)
+	cacheStr := os.Getenv("CACHE_TTL")
+	if cacheStr == "" {
+		cacheStr = "300"
+	}
+	cacheTTL, err := strconv.Atoi(cacheStr)
+	if err != nil {
+		errs = append(errs, "invalid CACHE_TTL value")
+	} else {
+		cfg.CacheTTL = cacheTTL
+	}
 
-    return &config, nil
-}
+	if len(errs) > 0 {
+		return nil, errors.New(strings.Join(errs, "; "))
+	}
 
-func loadFromEnv(config interface{}) {
-    // Environment variable loading logic would be implemented here
-    // This is a placeholder for the actual implementation
+	return cfg, nil
 }
