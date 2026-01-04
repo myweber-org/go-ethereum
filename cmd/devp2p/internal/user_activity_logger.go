@@ -6,31 +6,40 @@ import (
 	"time"
 )
 
-type responseWriter struct {
+type ActivityLogger struct {
+	handler http.Handler
+}
+
+func NewActivityLogger(handler http.Handler) *ActivityLogger {
+	return &ActivityLogger{handler: handler}
+}
+
+func (al *ActivityLogger) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	startTime := time.Now()
+	recorder := &responseRecorder{
+		ResponseWriter: w,
+		statusCode:     http.StatusOK,
+	}
+
+	al.handler.ServeHTTP(recorder, r)
+
+	duration := time.Since(startTime)
+	log.Printf(
+		"Method: %s | Path: %s | Status: %d | Duration: %v | UserAgent: %s",
+		r.Method,
+		r.URL.Path,
+		recorder.statusCode,
+		duration,
+		r.UserAgent(),
+	)
+}
+
+type responseRecorder struct {
 	http.ResponseWriter
 	statusCode int
 }
 
-func (rw *responseWriter) WriteHeader(code int) {
-	rw.statusCode = code
-	rw.ResponseWriter.WriteHeader(code)
-}
-
-func ActivityLogger(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		start := time.Now()
-		rw := &responseWriter{ResponseWriter: w, statusCode: http.StatusOK}
-
-		next.ServeHTTP(rw, r)
-
-		duration := time.Since(start)
-		log.Printf(
-			"%s %s %d %s %s",
-			r.Method,
-			r.URL.Path,
-			rw.statusCode,
-			duration,
-			r.RemoteAddr,
-		)
-	})
+func (rr *responseRecorder) WriteHeader(code int) {
+	rr.statusCode = code
+	rr.ResponseWriter.WriteHeader(code)
 }
