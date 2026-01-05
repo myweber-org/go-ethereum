@@ -34,3 +34,20 @@ func Tokenize(s string) []string {
 	}
 	return strings.Split(cleaned, " ")
 }
+package main
+
+import (
+	"errors"
+	"strings"
+)
+
+func ProcessUserInput(input string) (string, error) {
+	if strings.TrimSpace(input) == "" {
+		return "", errors.New("input cannot be empty")
+	}
+
+	processed := strings.ToLower(strings.TrimSpace(input))
+	processed = strings.ReplaceAll(processed, "  ", " ")
+
+	return processed, nil
+}
