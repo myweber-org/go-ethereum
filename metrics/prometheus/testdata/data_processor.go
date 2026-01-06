@@ -85,3 +85,44 @@ func GenerateReport(records []DataRecord) {
         fmt.Printf("  - %s (%s)\n", user.Name, user.Email)
     }
 }
+package data
+
+import (
+	"errors"
+	"regexp"
+	"strings"
+)
+
+var emailRegex = regexp.MustCompile(`^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$`)
+
+func ValidateEmail(email string) bool {
+	return emailRegex.MatchString(email)
+}
+
+func SanitizeString(input string) string {
+	return strings.TrimSpace(input)
+}
+
+func ReverseString(s string) string {
+	runes := []rune(s)
+	for i, j := 0, len(runes)-1; i < j; i, j = i+1, j-1 {
+		runes[i], runes[j] = runes[j], runes[i]
+	}
+	return string(runes)
+}
+
+func ConvertToTitleCase(input string) string {
+	if len(input) == 0 {
+		return input
+	}
+	return strings.ToUpper(input[:1]) + strings.ToLower(input[1:])
+}
+
+func ValidateNotEmpty(fields map[string]string) error {
+	for key, value := range fields {
+		if strings.TrimSpace(value) == "" {
+			return errors.New(key + " cannot be empty")
+		}
+	}
+	return nil
+}
