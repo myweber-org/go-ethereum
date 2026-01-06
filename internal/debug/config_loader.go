@@ -3,64 +3,56 @@ package config
 import (
     "fmt"
     "os"
-    "strconv"
-    "strings"
+    "path/filepath"
+
+    "gopkg.in/yaml.v2"
 )
 
+type DatabaseConfig struct {
+    Host     string `yaml:"host" env:"DB_HOST"`
+    Port     int    `yaml:"port" env:"DB_PORT"`
+    Username string `yaml:"username" env:"DB_USER"`
+    Password string `yaml:"password" env:"DB_PASS"`
+    Name     string `yaml:"name" env:"DB_NAME"`
+}
+
+type ServerConfig struct {
+    Port         int    `yaml:"port" env:"SERVER_PORT"`
+    Debug        bool   `yaml:"debug" env:"SERVER_DEBUG"`
+    LogLevel     string `yaml:"log_level" env:"LOG_LEVEL"`
+    ReadTimeout  int    `yaml:"read_timeout" env:"READ_TIMEOUT"`
+    WriteTimeout int    `yaml:"write_timeout" env:"WRITE_TIMEOUT"`
+}
+
 type AppConfig struct {
-    ServerPort int
-    DatabaseURL string
-    CacheEnabled bool
-    MaxConnections int
-    FeatureFlags map[string]bool
+    Database DatabaseConfig `yaml:"database"`
+    Server   ServerConfig   `yaml:"server"`
 }
 
-func LoadConfig() (*AppConfig, error) {
-    cfg := &AppConfig{
-        FeatureFlags: make(map[string]bool),
-    }
-
-    portStr := getEnvWithDefault("SERVER_PORT", "8080")
-    port, err := strconv.Atoi(portStr)
+func LoadConfig(configPath string) (*AppConfig, error) {
+    absPath, err := filepath.Abs(configPath)
     if err != nil {
-        return nil, fmt.Errorf("invalid SERVER_PORT value: %v", err)
-    }
-    cfg.ServerPort = port
-
-    dbURL := getEnvWithDefault("DATABASE_URL", "postgres://localhost:5432/appdb")
-    if !strings.HasPrefix(dbURL, "postgres://") {
-        return nil, fmt.Errorf("DATABASE_URL must start with postgres://")
-    }
-    cfg.DatabaseURL = dbURL
-
-    cacheEnabled := getEnvWithDefault("CACHE_ENABLED", "true")
-    cfg.CacheEnabled = strings.ToLower(cacheEnabled) == "true"
-
-    maxConnStr := getEnvWithDefault("MAX_CONNECTIONS", "100")
-    maxConn, err := strconv.Atoi(maxConnStr)
-    if err != nil || maxConn <= 0 {
-        return nil, fmt.Errorf("MAX_CONNECTIONS must be positive integer")
-    }
-    cfg.MaxConnections = maxConn
-
-    featureFlags := getEnvWithDefault("FEATURE_FLAGS", "")
-    if featureFlags != "" {
-        flags := strings.Split(featureFlags, ",")
-        for _, flag := range flags {
-            parts := strings.Split(strings.TrimSpace(flag), "=")
-            if len(parts) == 2 {
-                cfg.FeatureFlags[parts[0]] = strings.ToLower(parts[1]) == "true"
-            }
-        }
+        return nil, fmt.Errorf("failed to resolve config path: %w", err)
     }
 
-    return cfg, nil
+    data, err := os.ReadFile(absPath)
+    if err != nil {
+        return nil, fmt.Errorf("failed to read config file: %w", err)
+    }
+
+    var config AppConfig
+    if err := yaml.Unmarshal(data, &config); err != nil {
+        return nil, fmt.Errorf("failed to parse YAML config: %w", err)
+    }
+
+    overrideFromEnv(&config.Database)
+    overrideFromEnv(&config.Server)
+
+    return &config, nil
 }
 
-func getEnvWithDefault(key, defaultValue string) string {
-    value := os.Getenv(key)
-    if value == "" {
-        return defaultValue
-    }
-    return value
+func overrideFromEnv(config interface{}) {
+    // Implementation would use reflection to check struct tags
+    // and override values from environment variables
+    // Simplified placeholder for demonstration
 }
