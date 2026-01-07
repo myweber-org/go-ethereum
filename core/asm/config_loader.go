@@ -86,4 +86,127 @@ func DefaultConfigPath() string {
         return path
     }
     return filepath.Join("config", "app.yaml")
+}package config
+
+import (
+    "encoding/json"
+    "fmt"
+    "os"
+    "strings"
+)
+
+type DatabaseConfig struct {
+    Host     string `json:"host" env:"DB_HOST"`
+    Port     int    `json:"port" env:"DB_PORT"`
+    Username string `json:"username" env:"DB_USER"`
+    Password string `json:"password" env:"DB_PASS"`
+    SSLMode  string `json:"ssl_mode" env:"DB_SSL_MODE"`
+}
+
+type ServerConfig struct {
+    Port         int    `json:"port" env:"SERVER_PORT"`
+    ReadTimeout  int    `json:"read_timeout" env:"READ_TIMEOUT"`
+    WriteTimeout int    `json:"write_timeout" env:"WRITE_TIMEOUT"`
+    DebugMode    bool   `json:"debug_mode" env:"DEBUG_MODE"`
+}
+
+type Config struct {
+    Database DatabaseConfig `json:"database"`
+    Server   ServerConfig   `json:"server"`
+    Env      string         `json:"env" env:"APP_ENV"`
+}
+
+func LoadConfig(configPath string) (*Config, error) {
+    var cfg Config
+    
+    if configPath != "" {
+        file, err := os.Open(configPath)
+        if err != nil {
+            return nil, fmt.Errorf("failed to open config file: %w", err)
+        }
+        defer file.Close()
+        
+        decoder := json.NewDecoder(file)
+        if err := decoder.Decode(&cfg); err != nil {
+            return nil, fmt.Errorf("failed to decode config: %w", err)
+        }
+    }
+    
+    overrideFromEnv(&cfg)
+    
+    if err := validateConfig(&cfg); err != nil {
+        return nil, fmt.Errorf("config validation failed: %w", err)
+    }
+    
+    return &cfg, nil
+}
+
+func overrideFromEnv(cfg *Config) {
+    overrideStruct(cfg)
+}
+
+func overrideStruct(v interface{}) {
+    val := reflect.ValueOf(v).Elem()
+    typ := val.Type()
+    
+    for i := 0; i < val.NumField(); i++ {
+        field := val.Field(i)
+        fieldType := typ.Field(i)
+        
+        if field.Kind() == reflect.Struct {
+            overrideStruct(field.Addr().Interface())
+            continue
+        }
+        
+        envTag := fieldType.Tag.Get("env")
+        if envTag == "" {
+            continue
+        }
+        
+        envValue := os.Getenv(envTag)
+        if envValue == "" {
+            continue
+        }
+        
+        switch field.Kind() {
+        case reflect.String:
+            field.SetString(envValue)
+        case reflect.Int, reflect.Int64:
+            if intVal, err := strconv.Atoi(envValue); err == nil {
+                field.SetInt(int64(intVal))
+            }
+        case reflect.Bool:
+            boolVal := strings.ToLower(envValue) == "true" || envValue == "1"
+            field.SetBool(boolVal)
+        }
+    }
+}
+
+func validateConfig(cfg *Config) error {
+    if cfg.Database.Host == "" {
+        return fmt.Errorf("database host is required")
+    }
+    if cfg.Database.Port <= 0 || cfg.Database.Port > 65535 {
+        return fmt.Errorf("database port must be between 1 and 65535")
+    }
+    if cfg.Server.Port <= 0 || cfg.Server.Port > 65535 {
+        return fmt.Errorf("server port must be between 1 and 65535")
+    }
+    if cfg.Server.ReadTimeout < 0 {
+        return fmt.Errorf("read timeout cannot be negative")
+    }
+    if cfg.Server.WriteTimeout < 0 {
+        return fmt.Errorf("write timeout cannot be negative")
+    }
+    return nil
+}
+
+func (c *Config) GetDSN() string {
+    return fmt.Sprintf("host=%s port=%d user=%s password=%s sslmode=%s",
+        c.Database.Host,
+        c.Database.Port,
+        c.Database.Username,
+        c.Database.Password,
+        c.Database.SSLMode,
+    )
 }
