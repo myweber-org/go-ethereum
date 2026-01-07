@@ -1,41 +1,82 @@
-package datautils
+package main
 
-import "sort"
+import (
+	"encoding/csv"
+	"fmt"
+	"io"
+	"os"
+	"strings"
+)
 
-func RemoveDuplicates[T comparable](slice []T) []T {
-	if len(slice) == 0 {
-		return slice
+func cleanCSV(inputPath, outputPath string) error {
+	inFile, err := os.Open(inputPath)
+	if err != nil {
+		return fmt.Errorf("failed to open input file: %w", err)
+	}
+	defer inFile.Close()
+
+	outFile, err := os.Create(outputPath)
+	if err != nil {
+		return fmt.Errorf("failed to create output file: %w", err)
+	}
+	defer outFile.Close()
+
+	reader := csv.NewReader(inFile)
+	writer := csv.NewWriter(outFile)
+	defer writer.Flush()
+
+	headers, err := reader.Read()
+	if err != nil {
+		return fmt.Errorf("failed to read headers: %w", err)
 	}
 
-	seen := make(map[T]struct{})
-	result := make([]T, 0, len(slice))
+	cleanedHeaders := make([]string, len(headers))
+	for i, h := range headers {
+		cleanedHeaders[i] = strings.TrimSpace(strings.ToLower(h))
+	}
+	if err := writer.Write(cleanedHeaders); err != nil {
+		return fmt.Errorf("failed to write headers: %w", err)
+	}
 
-	for _, item := range slice {
-		if _, exists := seen[item]; !exists {
-			seen[item] = struct{}{}
-			result = append(result, item)
+	for {
+		record, err := reader.Read()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return fmt.Errorf("failed to read record: %w", err)
+		}
+
+		cleanedRecord := make([]string, len(record))
+		for i, field := range record {
+			cleanedField := strings.TrimSpace(field)
+			if cleanedField == "" {
+				cleanedField = "N/A"
+			}
+			cleanedRecord[i] = cleanedField
+		}
+
+		if err := writer.Write(cleanedRecord); err != nil {
+			return fmt.Errorf("failed to write record: %w", err)
 		}
 	}
 
-	return result
+	return nil
 }
 
-func RemoveDuplicatesSorted[T comparable](slice []T) []T {
-	if len(slice) == 0 {
-		return slice
+func main() {
+	if len(os.Args) != 3 {
+		fmt.Println("Usage: go run data_cleaner.go <input.csv> <output.csv>")
+		os.Exit(1)
 	}
 
-	sort.Slice(slice, func(i, j int) bool {
-		// Convert to string for comparison to satisfy comparable constraint
-		return false // Just a placeholder, actual sorting needs type-specific logic
-	})
+	inputFile := os.Args[1]
+	outputFile := os.Args[2]
 
-	result := slice[:1]
-	for i := 1; i < len(slice); i++ {
-		if slice[i] != slice[i-1] {
-			result = append(result, slice[i])
-		}
+	if err := cleanCSV(inputFile, outputFile); err != nil {
+		fmt.Printf("Error: %v\n", err)
+		os.Exit(1)
 	}
 
-	return result
+	fmt.Printf("Successfully cleaned data. Output saved to %s\n", outputFile)
 }
