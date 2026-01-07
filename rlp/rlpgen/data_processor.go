@@ -36,4 +36,55 @@ func (dp *DataProcessor) ExtractDomain(email string) (string, bool) {
 		return "", false
 	}
 	return parts[1], true
+}package main
+
+import (
+	"errors"
+	"regexp"
+	"strings"
+)
+
+func ValidateEmail(email string) error {
+	pattern := `^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$`
+	matched, err := regexp.MatchString(pattern, email)
+	if err != nil {
+		return err
+	}
+	if !matched {
+		return errors.New("invalid email format")
+	}
+	return nil
+}
+
+func NormalizeUsername(username string) string {
+	trimmed := strings.TrimSpace(username)
+	return strings.ToLower(trimmed)
+}
+
+func SanitizeInput(input string) string {
+	re := regexp.MustCompile(`[<>"'&]`)
+	return re.ReplaceAllString(input, "")
+}
+
+func TransformPhoneNumber(phone string) (string, error) {
+	re := regexp.MustCompile(`\D`)
+	digits := re.ReplaceAllString(phone, "")
+
+	if len(digits) < 10 {
+		return "", errors.New("phone number too short")
+	}
+
+	if len(digits) == 10 {
+		return "+1" + digits, nil
+	}
+
+	if len(digits) == 11 && strings.HasPrefix(digits, "1") {
+		return "+" + digits, nil
+	}
+
+	if len(digits) > 11 {
+		return "", errors.New("phone number too long")
+	}
+
+	return "", errors.New("invalid phone number format")
 }
