@@ -16,12 +16,14 @@ func NewActivityLogger(handler http.Handler) *ActivityLogger {
 
 func (al *ActivityLogger) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
-	userAgent := r.UserAgent()
-	ipAddress := r.RemoteAddr
-	requestPath := r.URL.Path
-
 	al.handler.ServeHTTP(w, r)
-
 	duration := time.Since(start)
-	log.Printf("Activity: %s | %s | %s | %v", ipAddress, userAgent, requestPath, duration)
+
+	log.Printf(
+		"Activity: %s %s from %s completed in %v",
+		r.Method,
+		r.URL.Path,
+		r.RemoteAddr,
+		duration,
+	)
 }
