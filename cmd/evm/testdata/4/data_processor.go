@@ -97,4 +97,89 @@ func GenerateReport(records []DataRecord) {
     fmt.Printf("Total records processed: %d\n", len(records))
     fmt.Printf("Active records: %d\n", activeCount)
     fmt.Printf("Inactive records: %d\n", len(records)-activeCount)
+}package main
+
+import (
+    "encoding/csv"
+    "errors"
+    "io"
+    "os"
+    "strconv"
+)
+
+type DataRecord struct {
+    ID    int
+    Name  string
+    Value float64
+}
+
+func ParseCSVFile(filename string) ([]DataRecord, error) {
+    file, err := os.Open(filename)
+    if err != nil {
+        return nil, err
+    }
+    defer file.Close()
+
+    reader := csv.NewReader(file)
+    records := make([]DataRecord, 0)
+
+    for {
+        row, err := reader.Read()
+        if err == io.EOF {
+            break
+        }
+        if err != nil {
+            return nil, err
+        }
+
+        if len(row) != 3 {
+            return nil, errors.New("invalid csv format")
+        }
+
+        id, err := strconv.Atoi(row[0])
+        if err != nil {
+            return nil, err
+        }
+
+        value, err := strconv.ParseFloat(row[2], 64)
+        if err != nil {
+            return nil, err
+        }
+
+        records = append(records, DataRecord{
+            ID:    id,
+            Name:  row[1],
+            Value: value,
+        })
+    }
+
+    return records, nil
+}
+
+func ValidateRecords(records []DataRecord) error {
+    if len(records) == 0 {
+        return errors.New("no records to validate")
+    }
+
+    for _, record := range records {
+        if record.ID <= 0 {
+            return errors.New("invalid id value")
+        }
+        if record.Name == "" {
+            return errors.New("empty name field")
+        }
+        if record.Value < 0 {
+            return errors.New("negative value not allowed")
+        }
+    }
+
+    return nil
+}
+
+func CalculateTotal(records []DataRecord) float64 {
+    total := 0.0
+    for _, record := range records {
+        total += record.Value
+    }
+    return total
 }
