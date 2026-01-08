@@ -3,60 +3,43 @@ package main
 
 import (
 	"fmt"
-	"strings"
+	"sort"
 )
 
 type DataRecord struct {
-	ID    int
-	Email string
-	Valid bool
-}
-
-func deduplicateRecords(records []DataRecord) []DataRecord {
-	seen := make(map[string]bool)
-	var unique []DataRecord
-
-	for _, record := range records {
-		email := strings.ToLower(strings.TrimSpace(record.Email))
-		if !seen[email] {
-			seen[email] = true
-			unique = append(unique, record)
-		}
-	}
-	return unique
-}
-
-func validateEmail(email string) bool {
-	if len(email) == 0 {
-		return false
-	}
-	return strings.Contains(email, "@") && strings.Contains(email, ".")
+	ID   int
+	Name string
 }
 
 func cleanData(records []DataRecord) []DataRecord {
-	var cleaned []DataRecord
+	seen := make(map[int]bool)
+	var unique []DataRecord
+
 	for _, record := range records {
-		if validateEmail(record.Email) {
-			record.Valid = true
-			cleaned = append(cleaned, record)
+		if !seen[record.ID] {
+			seen[record.ID] = true
+			unique = append(unique, record)
 		}
 	}
-	return deduplicateRecords(cleaned)
+
+	sort.Slice(unique, func(i, j int) bool {
+		return unique[i].ID < unique[j].ID
+	})
+
+	return unique
 }
 
 func main() {
-	sampleData := []DataRecord{
-		{1, "user@example.com", false},
-		{2, "invalid-email", false},
-		{3, "user@example.com", false},
-		{4, "test@domain.org", false},
+	data := []DataRecord{
+		{ID: 3, Name: "Charlie"},
+		{ID: 1, Name: "Alice"},
+		{ID: 2, Name: "Bob"},
+		{ID: 1, Name: "Alice"},
+		{ID: 4, Name: "David"},
 	}
 
-	cleaned := cleanData(sampleData)
-	fmt.Printf("Original: %d records\n", len(sampleData))
-	fmt.Printf("Cleaned: %d records\n", len(cleaned))
-
+	cleaned := cleanData(data)
 	for _, record := range cleaned {
-		fmt.Printf("ID: %d, Email: %s, Valid: %v\n", record.ID, record.Email, record.Valid)
+		fmt.Printf("ID: %d, Name: %s\n", record.ID, record.Name)
 	}
 }
