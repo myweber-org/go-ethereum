@@ -1,44 +1,105 @@
 
-package data_processor
+package main
 
 import (
-	"regexp"
-	"strings"
+	"encoding/csv"
+	"errors"
+	"io"
+	"os"
+	"strconv"
 )
 
-type DataProcessor struct {
-	stripSpaces   bool
-	removeSpecial bool
+type DataRecord struct {
+	ID    int
+	Name  string
+	Value float64
 }
 
-func NewDataProcessor(stripSpaces, removeSpecial bool) *DataProcessor {
-	return &DataProcessor{
-		stripSpaces:   stripSpaces,
-		removeSpecial: removeSpecial,
+func ReadCSVFile(filename string) ([]DataRecord, error) {
+	file, err := os.Open(filename)
+	if err != nil {
+		return nil, err
 	}
-}
+	defer file.Close()
 
-func (dp *DataProcessor) Process(input string) string {
-	result := input
+	reader := csv.NewReader(file)
+	records := []DataRecord{}
+	lineNumber := 0
 
-	if dp.stripSpaces {
-		result = strings.TrimSpace(result)
+	for {
+		line, err := reader.Read()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
+
+		lineNumber++
+		if lineNumber == 1 {
+			continue
+		}
+
+		if len(line) != 3 {
+			return nil, errors.New("invalid column count at line " + strconv.Itoa(lineNumber))
+		}
+
+		id, err := strconv.Atoi(line[0])
+		if err != nil {
+			return nil, errors.New("invalid ID at line " + strconv.Itoa(lineNumber))
+		}
+
+		name := line[1]
+
+		value, err := strconv.ParseFloat(line[2], 64)
+		if err != nil {
+			return nil, errors.New("invalid value at line " + strconv.Itoa(lineNumber))
+		}
+
+		records = append(records, DataRecord{
+			ID:    id,
+			Name:  name,
+			Value: value,
+		})
 	}
 
-	if dp.removeSpecial {
-		re := regexp.MustCompile(`[^a-zA-Z0-9\s]`)
-		result = re.ReplaceAllString(result, "")
+	return records, nil
+}
+
+func ValidateRecords(records []DataRecord) error {
+	if len(records) == 0 {
+		return errors.New("no records to validate")
 	}
 
-	return result
+	seenIDs := make(map[int]bool)
+	for _, record := range records {
+		if record.ID <= 0 {
+			return errors.New("invalid ID: " + strconv.Itoa(record.ID))
+		}
+		if record.Name == "" {
+			return errors.New("empty name for ID: " + strconv.Itoa(record.ID))
+		}
+		if record.Value < 0 {
+			return errors.New("negative value for ID: " + strconv.Itoa(record.ID))
+		}
+		if seenIDs[record.ID] {
+			return errors.New("duplicate ID found: " + strconv.Itoa(record.ID))
+		}
+		seenIDs[record.ID] = true
+	}
+
+	return nil
 }
 
-func (dp *DataProcessor) ValidateEmail(email string) bool {
-	emailRegex := regexp.MustCompile(`^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$`)
-	return emailRegex.MatchString(email)
-}
+func CalculateAverage(records []DataRecord) float64 {
+	if len(records) == 0 {
+		return 0
+	}
 
-func (dp *DataProcessor) CountWords(text string) int {
-	words := strings.Fields(text)
-	return len(words)
+	total := 0.0
+	for _, record := range records {
+		total += record.Value
+	}
+
+	return total / float64(len(records))
 }
