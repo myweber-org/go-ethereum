@@ -1,37 +1,38 @@
 package main
 
 import (
-	"fmt"
+	"regexp"
 	"strings"
 )
 
-type Record struct {
-	ID    int
-	Name  string
-	Value float64
-	Valid bool
+func NormalizeEmail(email string) (string, bool) {
+	email = strings.TrimSpace(email)
+	email = strings.ToLower(email)
+
+	pattern := `^[a-z0-9._%+\-]+@[a-z0-9.\-]+\.[a-z]{2,}$`
+	matched, err := regexp.MatchString(pattern, email)
+	if err != nil || !matched {
+		return "", false
+	}
+	return email, true
 }
 
-func ProcessRecords(records []Record) []Record {
-	var filtered []Record
-	for _, r := range records {
-		if r.Valid && r.Value > 0 {
-			r.Name = strings.ToUpper(strings.TrimSpace(r.Name))
-			filtered = append(filtered, r)
-		}
+func ValidateUsername(username string) bool {
+	username = strings.TrimSpace(username)
+	if len(username) < 3 || len(username) > 20 {
+		return false
 	}
-	return filtered
+
+	pattern := `^[a-zA-Z0-9_]+$`
+	matched, err := regexp.MatchString(pattern, username)
+	if err != nil {
+		return false
+	}
+	return matched
 }
 
-func main() {
-	records := []Record{
-		{1, "alpha", 10.5, true},
-		{2, "beta", -5.0, true},
-		{3, "gamma", 7.2, false},
-		{4, "delta", 3.8, true},
-	}
-	result := ProcessRecords(records)
-	for _, r := range result {
-		fmt.Printf("ID: %d, Name: %s, Value: %.1f\n", r.ID, r.Name, r.Value)
-	}
+func SanitizeInput(input string) string {
+	input = strings.TrimSpace(input)
+	re := regexp.MustCompile(`<[^>]*>`)
+	return re.ReplaceAllString(input, "")
 }
