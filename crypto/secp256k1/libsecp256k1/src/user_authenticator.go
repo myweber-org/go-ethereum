@@ -43,9 +43,14 @@ func GetUserID(ctx context.Context) (string, bool) {
 
 func validateToken(tokenString string) (string, error) {
 	// Simplified token validation - in production use a proper JWT library
-	// This is just a placeholder implementation
 	if tokenString == "" || len(tokenString) < 10 {
 		return "", http.ErrAbortHandler
 	}
-	return "user_" + tokenString[:8], nil
+	
+	// Mock validation: token is considered valid if it starts with "user_"
+	if strings.HasPrefix(tokenString, "user_") {
+		return strings.TrimPrefix(tokenString, "user_"), nil
+	}
+	
+	return "", http.ErrAbortHandler
 }
