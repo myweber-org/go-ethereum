@@ -1,53 +1,51 @@
-package middleware
+package auth
 
 import (
-	"context"
-	"net/http"
-	"strings"
+	"errors"
+	"time"
+
+	"github.com/golang-jwt/jwt/v5"
 )
 
-type contextKey string
+var secretKey = []byte("your-secret-key-change-in-production")
 
-const userIDKey contextKey = "userID"
+type Claims struct {
+	Username string `json:"username"`
+	UserID   int    `json:"user_id"`
+	jwt.RegisteredClaims
+}
 
-func Authenticate(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		authHeader := r.Header.Get("Authorization")
-		if authHeader == "" {
-			http.Error(w, "Authorization header required", http.StatusUnauthorized)
-			return
+func GenerateToken(username string, userID int) (string, error) {
+	expirationTime := time.Now().Add(24 * time.Hour)
+	claims := &Claims{
+		Username: username,
+		UserID:   userID,
+		RegisteredClaims: jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(expirationTime),
+			IssuedAt:  jwt.NewNumericDate(time.Now()),
+			Issuer:    "myapp",
+		},
+	}
+
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	return token.SignedString(secretKey)
+}
+
+func ValidateToken(tokenString string) (*Claims, error) {
+	token, err := jwt.ParseWithClaims(tokenString, &Claims{}, func(token *jwt.Token) (interface{}, error) {
+		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, errors.New("unexpected signing method")
 		}
-
-		parts := strings.Split(authHeader, " ")
-		if len(parts) != 2 || parts[0] != "Bearer" {
-			http.Error(w, "Invalid authorization format", http.StatusUnauthorized)
-			return
-		}
-
-		tokenString := parts[1]
-		userID, err := validateToken(tokenString)
-		if err != nil {
-			http.Error(w, "Invalid token", http.StatusUnauthorized)
-			return
-		}
-
-		ctx := context.WithValue(r.Context(), userIDKey, userID)
-		next.ServeHTTP(w, r.WithContext(ctx))
+		return secretKey, nil
 	})
-}
 
-func validateToken(tokenString string) (string, error) {
-	// Simplified token validation logic
-	// In production, use a proper JWT library
-	if tokenString == "valid_token_example" {
-		return "user123", nil
+	if err != nil {
+		return nil, err
 	}
-	return "", http.ErrNoCookie
-}
 
-func GetUserID(ctx context.Context) string {
-	if val, ok := ctx.Value(userIDKey).(string); ok {
-		return val
+	if claims, ok := token.Claims.(*Claims); ok && token.Valid {
+		return claims, nil
 	}
-	return ""
+
+	return nil, errors.New("invalid token")
 }
