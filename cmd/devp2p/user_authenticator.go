@@ -1,144 +1,6 @@
 package middleware
 
 import (
-    "net/http"
-    "strings"
-    "github.com/dgrijalva/jwt-go"
-)
-
-type Claims struct {
-    Username string `json:"username"`
-    Role     string `json:"role"`
-    jwt.StandardClaims
-}
-
-func AuthMiddleware(next http.Handler) http.Handler {
-    return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-        authHeader := r.Header.Get("Authorization")
-        if authHeader == "" {
-            http.Error(w, "Authorization header required", http.StatusUnauthorized)
-            return
-        }
-
-        tokenString := strings.TrimPrefix(authHeader, "Bearer ")
-        if tokenString == authHeader {
-            http.Error(w, "Bearer token required", http.StatusUnauthorized)
-            return
-        }
-
-        claims := &Claims{}
-        token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
-            return []byte("your-secret-key"), nil
-        })
-
-        if err != nil || !token.Valid {
-            http.Error(w, "Invalid token", http.StatusUnauthorized)
-            return
-        }
-
-        r.Header.Set("X-Username", claims.Username)
-        r.Header.Set("X-Role", claims.Role)
-        next.ServeHTTP(w, r)
-    })
-}package middleware
-
-import (
-    "net/http"
-    "strings"
-    "github.com/golang-jwt/jwt/v5"
-)
-
-type Claims struct {
-    UserID string `json:"user_id"`
-    Role   string `json:"role"`
-    jwt.RegisteredClaims
-}
-
-func AuthMiddleware(secretKey string) func(http.Handler) http.Handler {
-    return func(next http.Handler) http.Handler {
-        return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-            authHeader := r.Header.Get("Authorization")
-            if authHeader == "" {
-                http.Error(w, "Authorization header required", http.StatusUnauthorized)
-                return
-            }
-
-            parts := strings.Split(authHeader, " ")
-            if len(parts) != 2 || parts[0] != "Bearer" {
-                http.Error(w, "Invalid authorization format", http.StatusUnauthorized)
-                return
-            }
-
-            tokenStr := parts[1]
-            claims := &Claims{}
-
-            token, err := jwt.ParseWithClaims(tokenStr, claims, func(token *jwt.Token) (interface{}, error) {
-                return []byte(secretKey), nil
-            })
-
-            if err != nil || !token.Valid {
-                http.Error(w, "Invalid token", http.StatusUnauthorized)
-                return
-            }
-
-            r.Header.Set("X-User-ID", claims.UserID)
-            r.Header.Set("X-User-Role", claims.Role)
-
-            next.ServeHTTP(w, r)
-        })
-    }
-}package auth
-
-import (
-    "net/http"
-    "strings"
-    "github.com/golang-jwt/jwt/v5"
-)
-
-type Claims struct {
-    Username string `json:"username"`
-    Role     string `json:"role"`
-    jwt.RegisteredClaims
-}
-
-var jwtKey = []byte("your_secret_key_here")
-
-func Authenticate(next http.Handler) http.Handler {
-    return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-        authHeader := r.Header.Get("Authorization")
-        if authHeader == "" {
-            http.Error(w, "Authorization header required", http.StatusUnauthorized)
-            return
-        }
-
-        tokenString := strings.TrimPrefix(authHeader, "Bearer ")
-        if tokenString == authHeader {
-            http.Error(w, "Bearer token required", http.StatusUnauthorized)
-            return
-        }
-
-        claims := &Claims{}
-        token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
-            return jwtKey, nil
-        })
-
-        if err != nil || !token.Valid {
-            http.Error(w, "Invalid token", http.StatusUnauthorized)
-            return
-        }
-
-        if claims.Role != "admin" && strings.HasPrefix(r.URL.Path, "/admin") {
-            http.Error(w, "Insufficient permissions", http.StatusForbidden)
-            return
-        }
-
-        r.Header.Set("X-Username", claims.Username)
-        r.Header.Set("X-Role", claims.Role)
-        next.ServeHTTP(w, r)
-    })
-}package middleware
-
-import (
 	"context"
 	"net/http"
 	"strings"
@@ -146,14 +8,18 @@ import (
 
 type contextKey string
 
-const userIDKey contextKey = "userID"
+const UserIDKey contextKey = "userID"
 
-type Authenticator struct {
-	jwtSecret []byte
+type TokenValidator interface {
+	ValidateToken(tokenString string) (string, error)
 }
 
-func NewAuthenticator(secret string) *Authenticator {
-	return &Authenticator{jwtSecret: []byte(secret)}
+type Authenticator struct {
+	tokenValidator TokenValidator
+}
+
+func NewAuthenticator(validator TokenValidator) *Authenticator {
+	return &Authenticator{tokenValidator: validator}
 }
 
 func (a *Authenticator) Middleware(next http.Handler) http.Handler {
@@ -170,72 +36,13 @@ func (a *Authenticator) Middleware(next http.Handler) http.Handler {
 			return
 		}
 
-		tokenString := parts[1]
-		userID, err := a.validateToken(tokenString)
+		userID, err := a.tokenValidator.ValidateToken(parts[1])
 		if err != nil {
-			http.Error(w, "Invalid token", http.StatusUnauthorized)
+			http.Error(w, "Invalid or expired token", http.StatusUnauthorized)
 			return
 		}
 
-		ctx := context.WithValue(r.Context(), userIDKey, userID)
+		ctx := context.WithValue(r.Context(), UserIDKey, userID)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
-}
-
-func (a *Authenticator) validateToken(tokenString string) (string, error) {
-	// Simplified token validation - in production use a proper JWT library
-	// This is a placeholder implementation
-	if tokenString == "valid-token-example" {
-		return "user-123", nil
-	}
-	return "", fmt.Errorf("invalid token")
-}
-
-func GetUserID(ctx context.Context) (string, bool) {
-	userID, ok := ctx.Value(userIDKey).(string)
-	return userID, ok
-}package middleware
-
-import (
-    "net/http"
-    "strings"
-    "github.com/dgrijalva/jwt-go"
-)
-
-type Claims struct {
-    Username string `json:"username"`
-    Role     string `json:"role"`
-    jwt.StandardClaims
-}
-
-func AuthMiddleware(next http.Handler) http.Handler {
-    return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-        authHeader := r.Header.Get("Authorization")
-        if authHeader == "" {
-            http.Error(w, "Authorization header required", http.StatusUnauthorized)
-            return
-        }
-
-        parts := strings.Split(authHeader, " ")
-        if len(parts) != 2 || parts[0] != "Bearer" {
-            http.Error(w, "Invalid authorization format", http.StatusUnauthorized)
-            return
-        }
-
-        tokenStr := parts[1]
-        claims := &Claims{}
-
-        token, err := jwt.ParseWithClaims(tokenStr, claims, func(token *jwt.Token) (interface{}, error) {
-            return []byte("secret_key"), nil
-        })
-
-        if err != nil || !token.Valid {
-            http.Error(w, "Invalid token", http.StatusUnauthorized)
-            return
-        }
-
-        r.Header.Set("X-Username", claims.Username)
-        r.Header.Set("X-Role", claims.Role)
-        next.ServeHTTP(w, r)
-    })
 }
