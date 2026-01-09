@@ -42,10 +42,10 @@ func GetUserID(ctx context.Context) (string, bool) {
 }
 
 func validateToken(token string) (string, error) {
-	// Simplified token validation - in production use proper JWT library
+	// Simplified token validation logic
+	// In production, use a proper JWT library
 	if token == "" || len(token) < 10 {
 		return "", http.ErrAbortHandler
 	}
-	// Mock validation returning user ID
 	return "user_" + token[:8], nil
 }
