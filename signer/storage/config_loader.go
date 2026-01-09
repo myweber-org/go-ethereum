@@ -1,91 +1,66 @@
 package config
 
 import (
-	"os"
-	"strings"
+    "fmt"
+    "io/ioutil"
+    "os"
 
-	"gopkg.in/yaml.v2"
+    "gopkg.in/yaml.v2"
 )
 
-type Config struct {
-	Server struct {
-		Port    string `yaml:"port" env:"SERVER_PORT"`
-		Timeout int    `yaml:"timeout" env:"SERVER_TIMEOUT"`
-	} `yaml:"server"`
-	Database struct {
-		Host     string `yaml:"host" env:"DB_HOST"`
-		Port     string `yaml:"port" env:"DB_PORT"`
-		Name     string `yaml:"name" env:"DB_NAME"`
-		User     string `yaml:"user" env:"DB_USER"`
-		Password string `yaml:"password" env:"DB_PASSWORD"`
-	} `yaml:"database"`
-	Logging struct {
-		Level  string `yaml:"level" env:"LOG_LEVEL"`
-		Output string `yaml:"output" env:"LOG_OUTPUT"`
-	} `yaml:"logging"`
+type DatabaseConfig struct {
+    Host     string `yaml:"host"`
+    Port     int    `yaml:"port"`
+    Username string `yaml:"username"`
+    Password string `yaml:"password"`
+    Name     string `yaml:"name"`
 }
 
-func LoadConfig(configPath string) (*Config, error) {
-	config := &Config{}
-
-	file, err := os.Open(configPath)
-	if err != nil {
-		return nil, err
-	}
-	defer file.Close()
-
-	decoder := yaml.NewDecoder(file)
-	if err := decoder.Decode(config); err != nil {
-		return nil, err
-	}
-
-	config.overrideFromEnv()
-
-	return config, nil
+type ServerConfig struct {
+    Port         int            `yaml:"port"`
+    ReadTimeout  int            `yaml:"read_timeout"`
+    WriteTimeout int            `yaml:"write_timeout"`
+    Database     DatabaseConfig `yaml:"database"`
 }
 
-func (c *Config) overrideFromEnv() {
-	overrideStruct(c, "")
+func LoadConfig(path string) (*ServerConfig, error) {
+    if _, err := os.Stat(path); os.IsNotExist(err) {
+        return nil, fmt.Errorf("config file not found: %s", path)
+    }
+
+    data, err := ioutil.ReadFile(path)
+    if err != nil {
+        return nil, fmt.Errorf("failed to read config file: %v", err)
+    }
+
+    var config ServerConfig
+    if err := yaml.Unmarshal(data, &config); err != nil {
+        return nil, fmt.Errorf("failed to parse YAML: %v", err)
+    }
+
+    if err := validateConfig(&config); err != nil {
+        return nil, fmt.Errorf("config validation failed: %v", err)
+    }
+
+    return &config, nil
 }
 
-func overrideStruct(s interface{}, prefix string) {
-	v := reflect.ValueOf(s).Elem()
-	t := v.Type()
+func validateConfig(config *ServerConfig) error {
+    if config.Port <= 0 || config.Port > 65535 {
+        return fmt.Errorf("invalid server port: %d", config.Port)
+    }
 
-	for i := 0; i < v.NumField(); i++ {
-		field := v.Field(i)
-		fieldType := t.Field(i)
+    if config.Database.Host == "" {
+        return fmt.Errorf("database host cannot be empty")
+    }
 
-		envTag := fieldType.Tag.Get("env")
-		yamlTag := fieldType.Tag.Get("yaml")
+    if config.Database.Port <= 0 || config.Database.Port > 65535 {
+        return fmt.Errorf("invalid database port: %d", config.Database.Port)
+    }
 
-		if field.Kind() == reflect.Struct {
-			newPrefix := prefix
-			if yamlTag != "" {
-				newPrefix = strings.ToUpper(yamlTag) + "_"
-			}
-			overrideStruct(field.Addr().Interface(), newPrefix)
-			continue
-		}
+    if config.Database.Name == "" {
+        return fmt.Errorf("database name cannot be empty")
+    }
 
-		if envTag == "" {
-			continue
-		}
-
-		envKey := prefix + envTag
-		if envValue := os.Getenv(envKey); envValue != "" {
-			switch field.Kind() {
-			case reflect.String:
-				field.SetString(envValue)
-			case reflect.Int:
-				if intValue, err := strconv.Atoi(envValue); err == nil {
-					field.SetInt(int64(intValue))
-				}
-			case reflect.Bool:
-				if boolValue, err := strconv.ParseBool(envValue); err == nil {
-					field.SetBool(boolValue)
-				}
-			}
-		}
-	}
+    return nil
 }
