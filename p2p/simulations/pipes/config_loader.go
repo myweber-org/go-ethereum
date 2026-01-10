@@ -1,38 +1,46 @@
 package config
 
 import (
-    "os"
-    "strconv"
+    "fmt"
+    "io/ioutil"
+    "gopkg.in/yaml.v2"
 )
 
 type Config struct {
-    Port        int
-    DatabaseURL string
-    Debug       bool
+    Server struct {
+        Host string `yaml:"host"`
+        Port int    `yaml:"port"`
+    } `yaml:"server"`
+    Database struct {
+        Username string `yaml:"username"`
+        Password string `yaml:"password"`
+        Name     string `yaml:"name"`
+    } `yaml:"database"`
 }
 
-func Load() (*Config, error) {
-    cfg := &Config{
-        Port:        8080,
-        DatabaseURL: "postgres://localhost:5432/app",
-        Debug:       false,
+func LoadConfig(filename string) (*Config, error) {
+    data, err := ioutil.ReadFile(filename)
+    if err != nil {
+        return nil, fmt.Errorf("failed to read config file: %w", err)
     }
 
-    if portStr := os.Getenv("APP_PORT"); portStr != "" {
-        if port, err := strconv.Atoi(portStr); err == nil {
-            cfg.Port = port
-        }
+    var config Config
+    if err := yaml.Unmarshal(data, &config); err != nil {
+        return nil, fmt.Errorf("failed to parse YAML: %w", err)
     }
 
-    if dbURL := os.Getenv("DATABASE_URL"); dbURL != "" {
-        cfg.DatabaseURL = dbURL
-    }
+    return &config, nil
+}
 
-    if debugStr := os.Getenv("APP_DEBUG"); debugStr != "" {
-        if debug, err := strconv.ParseBool(debugStr); err == nil {
-            cfg.Debug = debug
-        }
+func (c *Config) Validate() error {
+    if c.Server.Host == "" {
+        return fmt.Errorf("server host cannot be empty")
     }
-
-    return cfg, nil
+    if c.Server.Port <= 0 || c.Server.Port > 65535 {
+        return fmt.Errorf("invalid server port: %d", c.Server.Port)
+    }
+    if c.Database.Name == "" {
+        return fmt.Errorf("database name cannot be empty")
+    }
+    return nil
 }
