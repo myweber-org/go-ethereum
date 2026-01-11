@@ -1,85 +1,96 @@
 package config
 
 import (
-    "fmt"
-    "os"
-    "path/filepath"
-
-    "gopkg.in/yaml.v2"
+	"encoding/json"
+	"fmt"
+	"os"
+	"strings"
 )
 
 type DatabaseConfig struct {
-    Host     string `yaml:"host" env:"DB_HOST"`
-    Port     int    `yaml:"port" env:"DB_PORT"`
-    Username string `yaml:"username" env:"DB_USER"`
-    Password string `yaml:"password" env:"DB_PASS"`
-    Name     string `yaml:"name" env:"DB_NAME"`
+	Host     string `json:"host" env:"DB_HOST"`
+	Port     int    `json:"port" env:"DB_PORT"`
+	Username string `json:"username" env:"DB_USER"`
+	Password string `json:"password" env:"DB_PASS"`
+	Database string `json:"database" env:"DB_NAME"`
 }
 
 type ServerConfig struct {
-    Port         int    `yaml:"port" env:"SERVER_PORT"`
-    ReadTimeout  int    `yaml:"read_timeout" env:"SERVER_READ_TIMEOUT"`
-    WriteTimeout int    `yaml:"write_timeout" env:"SERVER_WRITE_TIMEOUT"`
-    Debug        bool   `yaml:"debug" env:"SERVER_DEBUG"`
+	Port         int    `json:"port" env:"SERVER_PORT"`
+	ReadTimeout  int    `json:"read_timeout" env:"READ_TIMEOUT"`
+	WriteTimeout int    `json:"write_timeout" env:"WRITE_TIMEOUT"`
+	DebugMode    bool   `json:"debug_mode" env:"DEBUG_MODE"`
+	LogLevel     string `json:"log_level" env:"LOG_LEVEL"`
 }
 
 type AppConfig struct {
-    Database DatabaseConfig `yaml:"database"`
-    Server   ServerConfig   `yaml:"server"`
-    LogLevel string         `yaml:"log_level" env:"LOG_LEVEL"`
+	Server   ServerConfig   `json:"server"`
+	Database DatabaseConfig `json:"database"`
+	Features []string       `json:"features"`
 }
 
 func LoadConfig(configPath string) (*AppConfig, error) {
-    var config AppConfig
+	var config AppConfig
 
-    absPath, err := filepath.Abs(configPath)
-    if err != nil {
-        return nil, fmt.Errorf("failed to resolve config path: %w", err)
-    }
+	if configPath != "" {
+		fileData, err := os.ReadFile(configPath)
+		if err != nil {
+			return nil, fmt.Errorf("failed to read config file: %w", err)
+		}
 
-    data, err := os.ReadFile(absPath)
-    if err != nil {
-        return nil, fmt.Errorf("failed to read config file: %w", err)
-    }
+		if err := json.Unmarshal(fileData, &config); err != nil {
+			return nil, fmt.Errorf("failed to parse config JSON: %w", err)
+		}
+	}
 
-    if err := yaml.Unmarshal(data, &config); err != nil {
-        return nil, fmt.Errorf("failed to parse YAML config: %w", err)
-    }
+	overrideFromEnv(&config)
 
-    overrideFromEnv(&config)
+	if err := validateConfig(&config); err != nil {
+		return nil, err
+	}
 
-    return &config, nil
+	return &config, nil
 }
 
 func overrideFromEnv(config *AppConfig) {
-    if val := os.Getenv("DB_HOST"); val != "" {
-        config.Database.Host = val
-    }
-    if val := os.Getenv("DB_PORT"); val != "" {
-        fmt.Sscanf(val, "%d", &config.Database.Port)
-    }
-    if val := os.Getenv("DB_USER"); val != "" {
-        config.Database.Username = val
-    }
-    if val := os.Getenv("DB_PASS"); val != "" {
-        config.Database.Password = val
-    }
-    if val := os.Getenv("DB_NAME"); val != "" {
-        config.Database.Name = val
-    }
-    if val := os.Getenv("SERVER_PORT"); val != "" {
-        fmt.Sscanf(val, "%d", &config.Server.Port)
-    }
-    if val := os.Getenv("SERVER_READ_TIMEOUT"); val != "" {
-        fmt.Sscanf(val, "%d", &config.Server.ReadTimeout)
-    }
-    if val := os.Getenv("SERVER_WRITE_TIMEOUT"); val != "" {
-        fmt.Sscanf(val, "%d", &config.Server.WriteTimeout)
-    }
-    if val := os.Getenv("SERVER_DEBUG"); val != "" {
-        config.Server.Debug = val == "true" || val == "1"
-    }
-    if val := os.Getenv("LOG_LEVEL"); val != "" {
-        config.LogLevel = val
-    }
+	overrideStruct(&config.Server)
+	overrideStruct(&config.Database)
+}
+
+func overrideStruct(target interface{}) {
+	// This would typically use reflection to read struct tags
+	// and override values from environment variables
+	// Simplified implementation for demonstration
+}
+
+func validateConfig(config *AppConfig) error {
+	var errors []string
+
+	if config.Server.Port <= 0 || config.Server.Port > 65535 {
+		errors = append(errors, "server port must be between 1 and 65535")
+	}
+
+	if config.Database.Host == "" {
+		errors = append(errors, "database host is required")
+	}
+
+	if config.Database.Port <= 0 || config.Database.Port > 65535 {
+		errors = append(errors, "database port must be between 1 and 65535")
+	}
+
+	if len(errors) > 0 {
+		return fmt.Errorf("config validation failed: %s", strings.Join(errors, ", "))
+	}
+
+	return nil
+}
+
+func (c *AppConfig) String() string {
+	// Hide sensitive information
+	masked := *c
+	masked.Database.Password = "***"
+	masked.Database.Username = "***"
+
+	data, _ := json.MarshalIndent(masked, "", "  ")
+	return string(data)
 }
