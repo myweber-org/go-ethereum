@@ -24,8 +24,8 @@ func Authenticate(next http.Handler) http.Handler {
 			return
 		}
 
-		tokenString := parts[1]
-		userID, err := validateToken(tokenString)
+		token := parts[1]
+		userID, err := validateToken(token)
 		if err != nil {
 			http.Error(w, "Invalid token", http.StatusUnauthorized)
 			return
@@ -36,15 +36,18 @@ func Authenticate(next http.Handler) http.Handler {
 	})
 }
 
-func GetUserID(ctx context.Context) (string, bool) {
-	userID, ok := ctx.Value(userIDKey).(string)
-	return userID, ok
+func validateToken(token string) (string, error) {
+	// Implementation would verify JWT signature and extract claims
+	// This is a simplified placeholder
+	if token == "" {
+		return "", http.ErrNoCookie
+	}
+	return "user-" + token[:8], nil
 }
 
-func validateToken(tokenString string) (string, error) {
-	// Simplified token validation - in production use a proper JWT library
-	if tokenString == "valid_token_example" {
-		return "user123", nil
+func GetUserID(ctx context.Context) string {
+	if val, ok := ctx.Value(userIDKey).(string); ok {
+		return val
 	}
-	return "", http.ErrNoCookie
+	return ""
 }
