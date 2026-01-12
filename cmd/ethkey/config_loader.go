@@ -1,63 +1,81 @@
+
 package config
 
 import (
-    "fmt"
-    "io/ioutil"
-    "os"
-
-    "gopkg.in/yaml.v2"
+	"os"
+	"strconv"
+	"strings"
 )
 
-type DatabaseConfig struct {
-    Host     string `yaml:"host"`
-    Port     int    `yaml:"port"`
-    Username string `yaml:"username"`
-    Password string `yaml:"password"`
-    Name     string `yaml:"name"`
+type AppConfig struct {
+	ServerPort int
+	DebugMode  bool
+	DatabaseURL string
+	CacheTTL   int
 }
 
-type ServerConfig struct {
-    Port         int            `yaml:"port"`
-    Debug        bool           `yaml:"debug"`
-    ReadTimeout  int            `yaml:"read_timeout"`
-    WriteTimeout int            `yaml:"write_timeout"`
-    Database     DatabaseConfig `yaml:"database"`
+func LoadConfig() (*AppConfig, error) {
+	cfg := &AppConfig{
+		ServerPort: getEnvAsInt("SERVER_PORT", 8080),
+		DebugMode:  getEnvAsBool("DEBUG_MODE", false),
+		DatabaseURL: getEnv("DATABASE_URL", "postgres://localhost:5432/app"),
+		CacheTTL:   getEnvAsInt("CACHE_TTL", 300),
+	}
+
+	if err := validateConfig(cfg); err != nil {
+		return nil, err
+	}
+
+	return cfg, nil
 }
 
-func LoadConfig(filePath string) (*ServerConfig, error) {
-    if _, err := os.Stat(filePath); os.IsNotExist(err) {
-        return nil, fmt.Errorf("config file not found: %s", filePath)
-    }
-
-    data, err := ioutil.ReadFile(filePath)
-    if err != nil {
-        return nil, fmt.Errorf("failed to read config file: %w", err)
-    }
-
-    var config ServerConfig
-    if err := yaml.Unmarshal(data, &config); err != nil {
-        return nil, fmt.Errorf("failed to parse YAML config: %w", err)
-    }
-
-    if config.Server.Port == 0 {
-        config.Server.Port = 8080
-    }
-
-    return &config, nil
+func getEnv(key, defaultValue string) string {
+	if value, exists := os.LookupEnv(key); exists {
+		return value
+	}
+	return defaultValue
 }
 
-func ValidateConfig(config *ServerConfig) error {
-    if config.Server.Port < 1 || config.Server.Port > 65535 {
-        return fmt.Errorf("invalid server port: %d", config.Server.Port)
-    }
+func getEnvAsInt(key string, defaultValue int) int {
+	valueStr := getEnv(key, "")
+	if value, err := strconv.Atoi(valueStr); err == nil {
+		return value
+	}
+	return defaultValue
+}
 
-    if config.Database.Host == "" {
-        return fmt.Errorf("database host is required")
-    }
+func getEnvAsBool(key string, defaultValue bool) bool {
+	valueStr := getEnv(key, "")
+	if valueStr == "" {
+		return defaultValue
+	}
+	return strings.ToLower(valueStr) == "true" || valueStr == "1"
+}
 
-    if config.Database.Port < 1 || config.Database.Port > 65535 {
-        return fmt.Errorf("invalid database port: %d", config.Database.Port)
-    }
+func validateConfig(cfg *AppConfig) error {
+	if cfg.ServerPort < 1 || cfg.ServerPort > 65535 {
+		return ErrInvalidPort
+	}
+	if cfg.DatabaseURL == "" {
+		return ErrMissingDatabaseURL
+	}
+	if cfg.CacheTTL < 0 {
+		return ErrInvalidCacheTTL
+	}
+	return nil
+}
 
-    return nil
+var (
+	ErrInvalidPort        = ConfigError{Code: "INVALID_PORT", Message: "Port must be between 1 and 65535"}
+	ErrMissingDatabaseURL = ConfigError{Code: "MISSING_DB_URL", Message: "Database URL is required"}
+	ErrInvalidCacheTTL    = ConfigError{Code: "INVALID_CACHE_TTL", Message: "Cache TTL cannot be negative"}
+)
+
+type ConfigError struct {
+	Code    string
+	Message string
+}
+
+func (e ConfigError) Error() string {
+	return e.Code + ": " + e.Message
 }
