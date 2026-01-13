@@ -1,56 +1,43 @@
 package config
 
 import (
-    "os"
-    "strconv"
-    "strings"
+	"os"
+	"strconv"
+	"strings"
 )
 
 type Config struct {
-    ServerPort int
-    DebugMode  bool
-    DatabaseURL string
-    AllowedHosts []string
+	ServerPort int
+	DebugMode  bool
+	DatabaseURL string
+	AllowedHosts []string
 }
 
 func Load() (*Config, error) {
-    cfg := &Config{
-        ServerPort:  getInt("SERVER_PORT", 8080),
-        DebugMode:   getBool("DEBUG_MODE", false),
-        DatabaseURL: getString("DATABASE_URL", "postgres://localhost:5432/app"),
-        AllowedHosts: getStringSlice("ALLOWED_HOSTS", []string{"localhost", "127.0.0.1"}),
-    }
-    return cfg, nil
+	cfg := &Config{}
+	
+	portStr := getEnv("SERVER_PORT", "8080")
+	port, err := strconv.Atoi(portStr)
+	if err != nil {
+		return nil, err
+	}
+	cfg.ServerPort = port
+	
+	debugStr := getEnv("DEBUG_MODE", "false")
+	cfg.DebugMode = strings.ToLower(debugStr) == "true"
+	
+	cfg.DatabaseURL = getEnv("DATABASE_URL", "postgres://localhost:5432/app")
+	
+	hostsStr := getEnv("ALLOWED_HOSTS", "localhost,127.0.0.1")
+	cfg.AllowedHosts = strings.Split(hostsStr, ",")
+	
+	return cfg, nil
 }
 
-func getString(key, defaultValue string) string {
-    if value := os.Getenv(key); value != "" {
-        return value
-    }
-    return defaultValue
-}
-
-func getInt(key string, defaultValue int) int {
-    if value := os.Getenv(key); value != "" {
-        if intValue, err := strconv.Atoi(value); err == nil {
-            return intValue
-        }
-    }
-    return defaultValue
-}
-
-func getBool(key string, defaultValue bool) bool {
-    if value := os.Getenv(key); value != "" {
-        if boolValue, err := strconv.ParseBool(value); err == nil {
-            return boolValue
-        }
-    }
-    return defaultValue
-}
-
-func getStringSlice(key string, defaultValue []string) []string {
-    if value := os.Getenv(key); value != "" {
-        return strings.Split(value, ",")
-    }
-    return defaultValue
+func getEnv(key, defaultValue string) string {
+	value := os.Getenv(key)
+	if value == "" {
+		return defaultValue
+	}
+	return value
 }
