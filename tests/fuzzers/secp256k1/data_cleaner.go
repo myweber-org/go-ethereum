@@ -12,33 +12,37 @@ type DataRecord struct {
 	Valid bool
 }
 
-func deduplicateRecords(records []DataRecord) []DataRecord {
+func DeduplicateRecords(records []DataRecord) []DataRecord {
 	seen := make(map[string]bool)
 	var unique []DataRecord
 
 	for _, record := range records {
-		email := strings.ToLower(strings.TrimSpace(record.Email))
-		if !seen[email] {
-			seen[email] = true
+		key := strings.ToLower(strings.TrimSpace(record.Email))
+		if !seen[key] {
+			seen[key] = true
 			unique = append(unique, record)
 		}
 	}
 	return unique
 }
 
-func validateEmail(email string) bool {
-	if len(email) == 0 {
+func ValidateEmail(email string) bool {
+	if len(email) < 3 || !strings.Contains(email, "@") {
 		return false
 	}
-	return strings.Contains(email, "@") && strings.Contains(email, ".")
+	parts := strings.Split(email, "@")
+	if len(parts) != 2 || len(parts[0]) == 0 || len(parts[1]) == 0 {
+		return false
+	}
+	return strings.Contains(parts[1], ".")
 }
 
-func cleanData(records []DataRecord) []DataRecord {
+func CleanData(records []DataRecord) []DataRecord {
 	var cleaned []DataRecord
-	unique := deduplicateRecords(records)
+	unique := DeduplicateRecords(records)
 
 	for _, record := range unique {
-		record.Valid = validateEmail(record.Email)
+		record.Valid = ValidateEmail(record.Email)
 		if record.Valid {
 			cleaned = append(cleaned, record)
 		}
@@ -47,17 +51,17 @@ func cleanData(records []DataRecord) []DataRecord {
 }
 
 func main() {
-	records := []DataRecord{
+	sampleData := []DataRecord{
 		{1, "user@example.com", false},
 		{2, "user@example.com", false},
 		{3, "invalid-email", false},
 		{4, "test@domain.org", false},
-		{5, "ANOTHER@EXAMPLE.COM", false},
+		{5, "another@test.co.uk", false},
 	}
 
-	cleaned := cleanData(records)
-	fmt.Printf("Original: %d records\n", len(records))
-	fmt.Printf("Cleaned: %d valid unique records\n", len(cleaned))
+	cleaned := CleanData(sampleData)
+	fmt.Printf("Original: %d records\n", len(sampleData))
+	fmt.Printf("Cleaned: %d valid records\n", len(cleaned))
 
 	for _, record := range cleaned {
 		fmt.Printf("ID: %d, Email: %s\n", record.ID, record.Email)
