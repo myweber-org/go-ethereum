@@ -1,92 +1,64 @@
 package config
 
 import (
-    "fmt"
-    "os"
-    "strconv"
-    "strings"
+	"errors"
+	"io"
+	"os"
+
+	"gopkg.in/yaml.v3"
 )
 
 type Config struct {
-    ServerPort int
-    DBHost     string
-    DBPort     int
-    DebugMode  bool
-    AllowedIPs []string
+	Server struct {
+		Host string `yaml:"host"`
+		Port int    `yaml:"port"`
+	} `yaml:"server"`
+	Database struct {
+		Driver   string `yaml:"driver"`
+		Host     string `yaml:"host"`
+		Username string `yaml:"username"`
+		Password string `yaml:"password"`
+		Name     string `yaml:"name"`
+	} `yaml:"database"`
+	LogLevel string `yaml:"log_level"`
 }
 
-func Load() (*Config, error) {
-    cfg := &Config{}
+func LoadConfig(path string) (*Config, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
 
-    port, err := getIntEnv("SERVER_PORT", 8080)
-    if err != nil {
-        return nil, fmt.Errorf("invalid SERVER_PORT: %w", err)
-    }
-    cfg.ServerPort = port
+	data, err := io.ReadAll(file)
+	if err != nil {
+		return nil, err
+	}
 
-    cfg.DBHost = getStringEnv("DB_HOST", "localhost")
+	var cfg Config
+	if err := yaml.Unmarshal(data, &cfg); err != nil {
+		return nil, err
+	}
 
-    dbPort, err := getIntEnv("DB_PORT", 5432)
-    if err != nil {
-        return nil, fmt.Errorf("invalid DB_PORT: %w", err)
-    }
-    cfg.DBPort = dbPort
+	if err := validateConfig(&cfg); err != nil {
+		return nil, err
+	}
 
-    debug, err := getBoolEnv("DEBUG_MODE", false)
-    if err != nil {
-        return nil, fmt.Errorf("invalid DEBUG_MODE: %w", err)
-    }
-    cfg.DebugMode = debug
-
-    cfg.AllowedIPs = getStringSliceEnv("ALLOWED_IPS", []string{"127.0.0.1"})
-
-    if err := validateConfig(cfg); err != nil {
-        return nil, fmt.Errorf("config validation failed: %w", err)
-    }
-
-    return cfg, nil
-}
-
-func getStringEnv(key, defaultValue string) string {
-    if value := os.Getenv(key); value != "" {
-        return value
-    }
-    return defaultValue
-}
-
-func getIntEnv(key string, defaultValue int) (int, error) {
-    if value := os.Getenv(key); value != "" {
-        return strconv.Atoi(value)
-    }
-    return defaultValue, nil
-}
-
-func getBoolEnv(key string, defaultValue bool) (bool, error) {
-    if value := os.Getenv(key); value != "" {
-        return strconv.ParseBool(value)
-    }
-    return defaultValue, nil
-}
-
-func getStringSliceEnv(key string, defaultValue []string) []string {
-    if value := os.Getenv(key); value != "" {
-        return strings.Split(value, ",")
-    }
-    return defaultValue
+	return &cfg, nil
 }
 
 func validateConfig(cfg *Config) error {
-    if cfg.ServerPort < 1 || cfg.ServerPort > 65535 {
-        return fmt.Errorf("server port %d out of range", cfg.ServerPort)
-    }
-
-    if cfg.DBPort < 1 || cfg.DBPort > 65535 {
-        return fmt.Errorf("database port %d out of range", cfg.DBPort)
-    }
-
-    if cfg.DBHost == "" {
-        return fmt.Errorf("database host cannot be empty")
-    }
-
-    return nil
+	if cfg.Server.Host == "" {
+		return errors.New("server host cannot be empty")
+	}
+	if cfg.Server.Port <= 0 || cfg.Server.Port > 65535 {
+		return errors.New("server port must be between 1 and 65535")
+	}
+	if cfg.Database.Driver == "" {
+		return errors.New("database driver cannot be empty")
+	}
+	if cfg.LogLevel == "" {
+		cfg.LogLevel = "info"
+	}
+	return nil
 }
