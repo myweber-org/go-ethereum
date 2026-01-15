@@ -25,4 +25,61 @@ func main() {
 	uniqueStrings := RemoveDuplicates(strings)
 	fmt.Println("Original:", strings)
 	fmt.Println("Unique:", uniqueStrings)
+}package main
+
+import (
+    "fmt"
+    "strings"
+)
+
+type DataCleaner struct {
+    seen map[string]bool
+}
+
+func NewDataCleaner() *DataCleaner {
+    return &DataCleaner{
+        seen: make(map[string]bool),
+    }
+}
+
+func (dc *DataCleaner) Clean(input string) string {
+    trimmed := strings.TrimSpace(input)
+    if trimmed == "" {
+        return ""
+    }
+    lower := strings.ToLower(trimmed)
+    if dc.seen[lower] {
+        return ""
+    }
+    dc.seen[lower] = true
+    return trimmed
+}
+
+func (dc *DataCleaner) ValidateEmail(email string) bool {
+    if !strings.Contains(email, "@") {
+        return false
+    }
+    parts := strings.Split(email, "@")
+    if len(parts) != 2 {
+        return false
+    }
+    return len(parts[0]) > 0 && len(parts[1]) > 0
+}
+
+func main() {
+    cleaner := NewDataCleaner()
+    samples := []string{
+        "  User@Example.com  ",
+        "user@example.com",
+        "invalid-email",
+        "",
+        "  another@test.org  ",
+    }
+    for _, sample := range samples {
+        cleaned := cleaner.Clean(sample)
+        if cleaned != "" {
+            valid := cleaner.ValidateEmail(cleaned)
+            fmt.Printf("Original: %q -> Cleaned: %q (Valid: %v)\n", sample, cleaned, valid)
+        }
+    }
 }
