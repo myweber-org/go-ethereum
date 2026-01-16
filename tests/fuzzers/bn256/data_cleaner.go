@@ -1,59 +1,28 @@
-
 package main
 
-import (
-	"fmt"
-	"strings"
-)
+import "fmt"
 
-type DataCleaner struct {
-	seen map[string]bool
-}
+func RemoveDuplicates[T comparable](slice []T) []T {
+	seen := make(map[T]bool)
+	result := []T{}
 
-func NewDataCleaner() *DataCleaner {
-	return &DataCleaner{
-		seen: make(map[string]bool),
-	}
-}
-
-func (dc *DataCleaner) Deduplicate(items []string) []string {
-	var unique []string
-	for _, item := range items {
-		normalized := strings.ToLower(strings.TrimSpace(item))
-		if !dc.seen[normalized] && dc.validateItem(normalized) {
-			dc.seen[normalized] = true
-			unique = append(unique, item)
+	for _, item := range slice {
+		if !seen[item] {
+			seen[item] = true
+			result = append(result, item)
 		}
 	}
-	return unique
-}
-
-func (dc *DataCleaner) validateItem(item string) bool {
-	return len(item) > 0 && len(item) <= 100
-}
-
-func (dc *DataCleaner) Reset() {
-	dc.seen = make(map[string]bool)
+	return result
 }
 
 func main() {
-	cleaner := NewDataCleaner()
-	
-	data := []string{
-		"apple",
-		"Apple",
-		"banana",
-		"  banana  ",
-		"",
-		"orange",
-		"orange",
-		strings.Repeat("x", 150),
-	}
-	
-	cleaned := cleaner.Deduplicate(data)
-	fmt.Printf("Original: %v\n", data)
-	fmt.Printf("Cleaned: %v\n", cleaned)
-	fmt.Printf("Count: %d -> %d\n", len(data), len(cleaned))
-	
-	cleaner.Reset()
+	numbers := []int{1, 2, 2, 3, 4, 4, 5}
+	uniqueNumbers := RemoveDuplicates(numbers)
+	fmt.Println("Original:", numbers)
+	fmt.Println("Unique:", uniqueNumbers)
+
+	strings := []string{"apple", "banana", "apple", "orange"}
+	uniqueStrings := RemoveDuplicates(strings)
+	fmt.Println("Original:", strings)
+	fmt.Println("Unique:", uniqueStrings)
 }
