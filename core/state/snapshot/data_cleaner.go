@@ -1,70 +1,35 @@
-
-package main
+package utils
 
 import (
-    "fmt"
-    "strings"
+	"regexp"
+	"strings"
+	"unicode"
 )
 
-// DataCleaner provides methods for cleaning string data
-type DataCleaner struct{}
+func SanitizeString(input string) string {
+	// Remove any non-printable characters
+	clean := strings.Map(func(r rune) rune {
+		if unicode.IsPrint(r) {
+			return r
+		}
+		return -1
+	}, input)
 
-// Deduplicate removes duplicate entries from a slice of strings
-func (dc *DataCleaner) Deduplicate(items []string) []string {
-    seen := make(map[string]bool)
-    result := []string{}
-    for _, item := range items {
-        if !seen[item] {
-            seen[item] = true
-            result = append(result, item)
-        }
-    }
-    return result
+	// Replace multiple whitespaces with single space
+	re := regexp.MustCompile(`\s+`)
+	clean = re.ReplaceAllString(clean, " ")
+
+	// Trim leading/trailing whitespace
+	clean = strings.TrimSpace(clean)
+
+	return clean
 }
 
-// ValidateEmail checks if a string is a valid email format
-func (dc *DataCleaner) ValidateEmail(email string) bool {
-    if len(email) < 3 || len(email) > 254 {
-        return false
-    }
-    if !strings.Contains(email, "@") {
-        return false
-    }
-    parts := strings.Split(email, "@")
-    if len(parts) != 2 {
-        return false
-    }
-    if len(parts[0]) == 0 || len(parts[1]) == 0 {
-        return false
-    }
-    return true
+func NormalizeWhitespace(input string) string {
+	return strings.Join(strings.Fields(input), " ")
 }
 
-// TrimSpaces removes leading and trailing whitespace from all strings
-func (dc *DataCleaner) TrimSpaces(items []string) []string {
-    trimmed := make([]string, len(items))
-    for i, item := range items {
-        trimmed[i] = strings.TrimSpace(item)
-    }
-    return trimmed
-}
-
-func main() {
-    cleaner := &DataCleaner{}
-    
-    sampleData := []string{"  alice@example.com", "bob@test.org", "  alice@example.com", "invalid-email", "  charlie@demo.net  "}
-    
-    fmt.Println("Original data:", sampleData)
-    
-    trimmed := cleaner.TrimSpaces(sampleData)
-    fmt.Println("After trimming:", trimmed)
-    
-    deduplicated := cleaner.Deduplicate(trimmed)
-    fmt.Println("After deduplication:", deduplicated)
-    
-    fmt.Println("\nEmail validation results:")
-    for _, email := range deduplicated {
-        isValid := cleaner.ValidateEmail(email)
-        fmt.Printf("%s: %v\n", email, isValid)
-    }
+func RemoveExtraSpaces(input string) string {
+	re := regexp.MustCompile(`\s{2,}`)
+	return re.ReplaceAllString(input, " ")
 }
