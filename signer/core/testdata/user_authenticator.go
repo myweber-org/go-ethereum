@@ -4,61 +4,6 @@ import (
 	"context"
 	"net/http"
 	"strings"
-
-	"github.com/golang-jwt/jwt/v5"
-)
-
-type contextKey string
-
-const userIDKey contextKey = "userID"
-
-type Claims struct {
-	UserID string `json:"user_id"`
-	jwt.RegisteredClaims
-}
-
-func AuthMiddleware(secretKey string) func(http.Handler) http.Handler {
-	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			authHeader := r.Header.Get("Authorization")
-			if authHeader == "" {
-				http.Error(w, "Authorization header required", http.StatusUnauthorized)
-				return
-			}
-
-			parts := strings.Split(authHeader, " ")
-			if len(parts) != 2 || parts[0] != "Bearer" {
-				http.Error(w, "Invalid authorization format", http.StatusUnauthorized)
-				return
-			}
-
-			tokenStr := parts[1]
-			claims := &Claims{}
-
-			token, err := jwt.ParseWithClaims(tokenStr, claims, func(token *jwt.Token) (interface{}, error) {
-				return []byte(secretKey), nil
-			})
-
-			if err != nil || !token.Valid {
-				http.Error(w, "Invalid or expired token", http.StatusUnauthorized)
-				return
-			}
-
-			ctx := context.WithValue(r.Context(), userIDKey, claims.UserID)
-			next.ServeHTTP(w, r.WithContext(ctx))
-		})
-	}
-}
-
-func GetUserID(ctx context.Context) (string, bool) {
-	userID, ok := ctx.Value(userIDKey).(string)
-	return userID, ok
-}package auth
-
-import (
-	"context"
-	"net/http"
-	"strings"
 )
 
 type contextKey string
@@ -66,76 +11,10 @@ type contextKey string
 const userIDKey contextKey = "userID"
 
 type Authenticator struct {
-	secretKey []byte
+	tokenValidator func(string) (string, bool)
 }
 
-func NewAuthenticator(secretKey string) *Authenticator {
-	return &Authenticator{
-		secretKey: []byte(secretKey),
-	}
-}
-
-func (a *Authenticator) Middleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		authHeader := r.Header.Get("Authorization")
-		if authHeader == "" {
-			http.Error(w, "Authorization header required", http.StatusUnauthorized)
-			return
-		}
-
-		parts := strings.Split(authHeader, " ")
-		if len(parts) != 2 || parts[0] != "Bearer" {
-			http.Error(w, "Invalid authorization format", http.StatusUnauthorized)
-			return
-		}
-
-		tokenString := parts[1]
-		userID, err := a.validateToken(tokenString)
-		if err != nil {
-			http.Error(w, "Invalid token", http.StatusUnauthorized)
-			return
-		}
-
-		ctx := context.WithValue(r.Context(), userIDKey, userID)
-		next.ServeHTTP(w, r.WithContext(ctx))
-	})
-}
-
-func (a *Authenticator) validateToken(tokenString string) (string, error) {
-	// Simplified token validation - in real implementation use proper JWT library
-	// This is a placeholder for demonstration
-	if tokenString == "" {
-		return "", http.ErrNoCookie
-	}
-	
-	// Mock validation - return user ID if token is not empty
-	return "user-" + tokenString[:8], nil
-}
-
-func GetUserID(ctx context.Context) (string, bool) {
-	userID, ok := ctx.Value(userIDKey).(string)
-	return userID, ok
-}package middleware
-
-import (
-	"context"
-	"net/http"
-	"strings"
-)
-
-type contextKey string
-
-const userIDKey contextKey = "userID"
-
-type TokenValidator interface {
-	ValidateToken(tokenString string) (string, error)
-}
-
-type Authenticator struct {
-	tokenValidator TokenValidator
-}
-
-func NewAuthenticator(validator TokenValidator) *Authenticator {
+func NewAuthenticator(validator func(string) (string, bool)) *Authenticator {
 	return &Authenticator{
 		tokenValidator: validator,
 	}
@@ -150,15 +29,15 @@ func (a *Authenticator) Middleware(next http.Handler) http.Handler {
 		}
 
 		parts := strings.Split(authHeader, " ")
-		if len(parts) != 2 || parts[0] != "Bearer" {
+		if len(parts) != 2 || strings.ToLower(parts[0]) != "bearer" {
 			http.Error(w, "Invalid authorization format", http.StatusUnauthorized)
 			return
 		}
 
-		tokenString := parts[1]
-		userID, err := a.tokenValidator.ValidateToken(tokenString)
-		if err != nil {
-			http.Error(w, "Invalid token", http.StatusUnauthorized)
+		token := parts[1]
+		userID, valid := a.tokenValidator(token)
+		if !valid {
+			http.Error(w, "Invalid or expired token", http.StatusUnauthorized)
 			return
 		}
 
