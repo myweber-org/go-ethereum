@@ -187,4 +187,93 @@ func main() {
     }
 
     fmt.Println("Log rotation completed")
+}package main
+
+import (
+	"compress/gzip"
+	"fmt"
+	"io"
+	"os"
+	"path/filepath"
+	"time"
+)
+
+type LogRotator struct {
+	basePath   string
+	maxSize    int64
+	retention  int
+}
+
+func NewLogRotator(basePath string, maxSize int64, retention int) *LogRotator {
+	return &LogRotator{
+		basePath:  basePath,
+		maxSize:   maxSize,
+		retention: retention,
+	}
+}
+
+func (lr *LogRotator) RotateIfNeeded() error {
+	info, err := os.Stat(lr.basePath)
+	if os.IsNotExist(err) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("stat log file: %w", err)
+	}
+
+	if info.Size() < lr.maxSize {
+		return nil
+	}
+
+	timestamp := time.Now().Format("20060102_150405")
+	archiveName := fmt.Sprintf("%s_%s.gz", lr.basePath, timestamp)
+	if err := lr.compressFile(lr.basePath, archiveName); err != nil {
+		return fmt.Errorf("compress log: %w", err)
+	}
+
+	if err := os.Truncate(lr.basePath, 0); err != nil {
+		return fmt.Errorf("truncate log: %w", err)
+	}
+
+	return lr.cleanupOldArchives()
+}
+
+func (lr *LogRotator) compressFile(source, target string) error {
+	in, err := os.Open(source)
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+
+	out, err := os.Create(target)
+	if err != nil {
+		return err
+	}
+	defer out.Close()
+
+	gz := gzip.NewWriter(out)
+	defer gz.Close()
+
+	_, err = io.Copy(gz, in)
+	return err
+}
+
+func (lr *LogRotator) cleanupOldArchives() error {
+	pattern := fmt.Sprintf("%s_*.gz", lr.basePath)
+	matches, err := filepath.Glob(pattern)
+	if err != nil {
+		return err
+	}
+
+	if len(matches) <= lr.retention {
+		return nil
+	}
+
+	toDelete := matches[:len(matches)-lr.retention]
+	for _, file := range toDelete {
+		if err := os.Remove(file); err != nil {
+			return fmt.Errorf("remove old archive %s: %w", file, err)
+		}
+	}
+	return nil
 }
