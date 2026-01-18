@@ -124,4 +124,50 @@ func CalculateStatistics(records []DataRecord) (float64, float64, int) {
 
 	average := sum / float64(len(records))
 	return average, maxValue - minValue, activeCount
+}package main
+
+import (
+	"encoding/json"
+	"fmt"
+	"strings"
+)
+
+type UserData struct {
+	ID    int    `json:"id"`
+	Name  string `json:"name"`
+	Email string `json:"email"`
+}
+
+func ParseAndValidateJSON(rawJSON string) (*UserData, error) {
+	if strings.TrimSpace(rawJSON) == "" {
+		return nil, fmt.Errorf("empty JSON input")
+	}
+
+	var data UserData
+	err := json.Unmarshal([]byte(rawJSON), &data)
+	if err != nil {
+		return nil, fmt.Errorf("JSON parsing failed: %w", err)
+	}
+
+	if data.ID <= 0 {
+		return nil, fmt.Errorf("invalid ID: must be positive integer")
+	}
+	if data.Name == "" {
+		return nil, fmt.Errorf("name field is required")
+	}
+	if !strings.Contains(data.Email, "@") {
+		return nil, fmt.Errorf("invalid email format")
+	}
+
+	return &data, nil
+}
+
+func main() {
+	jsonStr := `{"id": 100, "name": "John Doe", "email": "john@example.com"}`
+	user, err := ParseAndValidateJSON(jsonStr)
+	if err != nil {
+		fmt.Printf("Error: %v\n", err)
+		return
+	}
+	fmt.Printf("Parsed user: %+v\n", user)
 }
