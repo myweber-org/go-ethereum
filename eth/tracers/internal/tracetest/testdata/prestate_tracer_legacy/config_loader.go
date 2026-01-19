@@ -72,4 +72,50 @@ func ValidateConfig(config *AppConfig) error {
         return fmt.Errorf("invalid server port: %d", config.Server.Port)
     }
     return nil
+}package config
+
+import (
+	"encoding/json"
+	"os"
+	"path/filepath"
+)
+
+type Config struct {
+	ServerPort string `json:"server_port"`
+	DBHost     string `json:"db_host"`
+	DBPort     string `json:"db_port"`
+	LogLevel   string `json:"log_level"`
+}
+
+func LoadConfig(configPath string) (*Config, error) {
+	absPath, err := filepath.Abs(configPath)
+	if err != nil {
+		return nil, err
+	}
+
+	file, err := os.Open(absPath)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+
+	var config Config
+	decoder := json.NewDecoder(file)
+	if err := decoder.Decode(&config); err != nil {
+		return nil, err
+	}
+
+	config.ServerPort = getEnvOrDefault("SERVER_PORT", config.ServerPort)
+	config.DBHost = getEnvOrDefault("DB_HOST", config.DBHost)
+	config.DBPort = getEnvOrDefault("DB_PORT", config.DBPort)
+	config.LogLevel = getEnvOrDefault("LOG_LEVEL", config.LogLevel)
+
+	return &config, nil
+}
+
+func getEnvOrDefault(key, defaultValue string) string {
+	if value := os.Getenv(key); value != "" {
+		return value
+	}
+	return defaultValue
 }
