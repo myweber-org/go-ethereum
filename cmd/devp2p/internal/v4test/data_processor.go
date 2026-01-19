@@ -1,38 +1,81 @@
 package main
 
 import (
+	"encoding/csv"
 	"fmt"
+	"io"
+	"os"
+	"strings"
 )
 
-// CalculateMovingAverage computes the moving average of a slice of float64 values
-// using a specified window size. Returns a slice of averages.
-func CalculateMovingAverage(data []float64, windowSize int) []float64 {
-	if windowSize <= 0 || windowSize > len(data) {
-		return nil
-	}
-
-	var result []float64
-	var sum float64
-
-	// Calculate the first window's sum
-	for i := 0; i < windowSize; i++ {
-		sum += data[i]
-	}
-	result = append(result, sum/float64(windowSize))
-
-	// Slide the window and compute subsequent averages
-	for i := windowSize; i < len(data); i++ {
-		sum = sum - data[i-windowSize] + data[i]
-		result = append(result, sum/float64(windowSize))
-	}
-
-	return result
+type DataRecord struct {
+	ID      string
+	Name    string
+	Email   string
+	Active  string
 }
 
-func main() {
-	// Example usage
-	data := []float64{1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0}
-	window := 3
-	averages := CalculateMovingAverage(data, window)
-	fmt.Printf("Moving averages with window size %d: %v\n", window, averages)
+func ProcessCSVFile(filename string) ([]DataRecord, error) {
+	file, err := os.Open(filename)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open file: %w", err)
+	}
+	defer file.Close()
+
+	reader := csv.NewReader(file)
+	reader.TrimLeadingSpace = true
+
+	var records []DataRecord
+	lineNumber := 0
+
+	for {
+		lineNumber++
+		row, err := reader.Read()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return nil, fmt.Errorf("csv read error at line %d: %w", lineNumber, err)
+		}
+
+		if len(row) < 4 {
+			return nil, fmt.Errorf("insufficient columns at line %d", lineNumber)
+		}
+
+		record := DataRecord{
+			ID:     strings.TrimSpace(row[0]),
+			Name:   strings.TrimSpace(row[1]),
+			Email:  strings.TrimSpace(row[2]),
+			Active: strings.TrimSpace(row[3]),
+		}
+
+		if record.ID == "" || record.Name == "" {
+			return nil, fmt.Errorf("missing required fields at line %d", lineNumber)
+		}
+
+		records = append(records, record)
+	}
+
+	return records, nil
+}
+
+func ValidateRecords(records []DataRecord) []DataRecord {
+	var validRecords []DataRecord
+	for _, record := range records {
+		if record.Active == "true" && strings.Contains(record.Email, "@") {
+			validRecords = append(validRecords, record)
+		}
+	}
+	return validRecords
+}
+
+func GenerateReport(records []DataRecord) {
+	fmt.Printf("Total records processed: %d\n", len(records))
+	activeCount := 0
+	for _, record := range records {
+		if record.Active == "true" {
+			activeCount++
+		}
+	}
+	fmt.Printf("Active records: %d\n", activeCount)
 }
