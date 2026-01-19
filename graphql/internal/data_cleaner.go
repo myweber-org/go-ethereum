@@ -151,4 +151,41 @@ func main() {
 	}
 
 	fmt.Printf("Data cleaning completed. Output written to %s\n", outputFile)
+}package csvutil
+
+import (
+	"encoding/csv"
+	"io"
+	"strings"
+)
+
+func CleanCSV(input io.Reader, output io.Writer) error {
+	reader := csv.NewReader(input)
+	writer := csv.NewWriter(output)
+	defer writer.Flush()
+
+	for {
+		record, err := reader.Read()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return err
+		}
+
+		hasData := false
+		for _, field := range record {
+			if strings.TrimSpace(field) != "" {
+				hasData = true
+				break
+			}
+		}
+
+		if hasData {
+			if err := writer.Write(record); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
