@@ -1,3 +1,4 @@
+
 package main
 
 import (
@@ -13,7 +14,7 @@ import (
 func encryptFile(inputPath, outputPath string, key []byte) error {
 	plaintext, err := os.ReadFile(inputPath)
 	if err != nil {
-		return fmt.Errorf("read file: %w", err)
+		return fmt.Errorf("read input file: %w", err)
 	}
 
 	block, err := aes.NewCipher(key)
@@ -34,7 +35,7 @@ func encryptFile(inputPath, outputPath string, key []byte) error {
 	ciphertext := gcm.Seal(nonce, nonce, plaintext, nil)
 
 	if err := os.WriteFile(outputPath, ciphertext, 0644); err != nil {
-		return fmt.Errorf("write file: %w", err)
+		return fmt.Errorf("write output file: %w", err)
 	}
 
 	return nil
@@ -43,7 +44,7 @@ func encryptFile(inputPath, outputPath string, key []byte) error {
 func decryptFile(inputPath, outputPath string, key []byte) error {
 	ciphertext, err := os.ReadFile(inputPath)
 	if err != nil {
-		return fmt.Errorf("read file: %w", err)
+		return fmt.Errorf("read input file: %w", err)
 	}
 
 	block, err := aes.NewCipher(key)
@@ -68,7 +69,7 @@ func decryptFile(inputPath, outputPath string, key []byte) error {
 	}
 
 	if err := os.WriteFile(outputPath, plaintext, 0644); err != nil {
-		return fmt.Errorf("write file: %w", err)
+		return fmt.Errorf("write output file: %w", err)
 	}
 
 	return nil
@@ -76,36 +77,31 @@ func decryptFile(inputPath, outputPath string, key []byte) error {
 
 func main() {
 	key := make([]byte, 32)
-	if _, err := io.ReadFull(rand.Reader, key); err != nil {
-		fmt.Printf("Generate key failed: %v\n", err)
+	if _, err := rand.Read(key); err != nil {
+		fmt.Printf("Generate key error: %v\n", err)
 		return
 	}
 
-	const testFile = "test_data.txt"
-	const encryptedFile = "encrypted.dat"
-	const decryptedFile = "decrypted.txt"
+	inputFile := "test.txt"
+	encryptedFile := "test.enc"
+	decryptedFile := "test_decrypted.txt"
 
-	if err := os.WriteFile(testFile, []byte("Sensitive information here"), 0644); err != nil {
-		fmt.Printf("Create test file failed: %v\n", err)
+	if err := os.WriteFile(inputFile, []byte("Secret data for encryption test"), 0644); err != nil {
+		fmt.Printf("Create test file error: %v\n", err)
 		return
 	}
-	defer os.Remove(testFile)
-	defer os.Remove(encryptedFile)
-	defer os.Remove(decryptedFile)
 
 	fmt.Println("Encrypting file...")
-	if err := encryptFile(testFile, encryptedFile, key); err != nil {
-		fmt.Printf("Encryption failed: %v\n", err)
+	if err := encryptFile(inputFile, encryptedFile, key); err != nil {
+		fmt.Printf("Encryption error: %v\n", err)
 		return
 	}
 
 	fmt.Println("Decrypting file...")
 	if err := decryptFile(encryptedFile, decryptedFile, key); err != nil {
-		fmt.Printf("Decryption failed: %v\n", err)
+		fmt.Printf("Decryption error: %v\n", err)
 		return
 	}
 
-	content, _ := os.ReadFile(decryptedFile)
-	fmt.Printf("Decrypted content: %s\n", string(content))
 	fmt.Println("Operation completed successfully")
 }
