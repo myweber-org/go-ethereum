@@ -62,4 +62,53 @@ func main() {
 	}
 
 	fmt.Printf("Successfully cleaned CSV: %s -> %s\n", inputFile, outputFile)
+}package main
+
+import (
+	"fmt"
+	"strings"
+)
+
+type DataCleaner struct {
+	normalizeCase bool
+	trimSpaces    bool
+}
+
+func NewDataCleaner() *DataCleaner {
+	return &DataCleaner{
+		normalizeCase: true,
+		trimSpaces:    true,
+	}
+}
+
+func (dc *DataCleaner) NormalizeString(input string) string {
+	result := input
+	if dc.trimSpaces {
+		result = strings.TrimSpace(result)
+	}
+	if dc.normalizeCase {
+		result = strings.ToLower(result)
+	}
+	return result
+}
+
+func (dc *DataCleaner) DeduplicateStrings(items []string) []string {
+	seen := make(map[string]bool)
+	var unique []string
+	for _, item := range items {
+		normalized := dc.NormalizeString(item)
+		if !seen[normalized] {
+			seen[normalized] = true
+			unique = append(unique, normalized)
+		}
+	}
+	return unique
+}
+
+func main() {
+	cleaner := NewDataCleaner()
+	data := []string{"  Apple", "apple ", "BANANA", "banana", "  Cherry  "}
+	cleaned := cleaner.DeduplicateStrings(data)
+	fmt.Printf("Original: %v\n", data)
+	fmt.Printf("Cleaned: %v\n", cleaned)
 }
