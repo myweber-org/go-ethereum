@@ -1,94 +1,43 @@
-package main
+
+package data_processor
 
 import (
-	"encoding/csv"
-	"fmt"
-	"io"
-	"os"
-	"strconv"
+	"regexp"
+	"strings"
 )
 
-type Record struct {
-	ID    int
-	Name  string
-	Value float64
+type Processor struct {
+	allowedPattern *regexp.Regexp
 }
 
-func ProcessCSVFile(filename string) ([]Record, error) {
-	file, err := os.Open(filename)
+func NewProcessor(allowedPattern string) (*Processor, error) {
+	compiled, err := regexp.Compile(allowedPattern)
 	if err != nil {
-		return nil, fmt.Errorf("failed to open file: %w", err)
+		return nil, err
 	}
-	defer file.Close()
-
-	reader := csv.NewReader(file)
-	records := make([]Record, 0)
-
-	// Skip header
-	_, err = reader.Read()
-	if err != nil {
-		return nil, fmt.Errorf("failed to read header: %w", err)
-	}
-
-	for {
-		row, err := reader.Read()
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			return nil, fmt.Errorf("failed to read row: %w", err)
-		}
-
-		if len(row) < 3 {
-			return nil, fmt.Errorf("invalid row format: %v", row)
-		}
-
-		id, err := strconv.Atoi(row[0])
-		if err != nil {
-			return nil, fmt.Errorf("invalid ID format: %w", err)
-		}
-
-		name := row[1]
-
-		value, err := strconv.ParseFloat(row[2], 64)
-		if err != nil {
-			return nil, fmt.Errorf("invalid value format: %w", err)
-		}
-
-		records = append(records, Record{
-			ID:    id,
-			Name:  name,
-			Value: value,
-		})
-	}
-
-	return records, nil
+	return &Processor{allowedPattern: compiled}, nil
 }
 
-func ValidateRecords(records []Record) error {
-	seenIDs := make(map[int]bool)
-	for _, record := range records {
-		if record.ID <= 0 {
-			return fmt.Errorf("invalid ID: %d", record.ID)
-		}
-		if record.Name == "" {
-			return fmt.Errorf("empty name for ID: %d", record.ID)
-		}
-		if record.Value < 0 {
-			return fmt.Errorf("negative value for ID: %d", record.ID)
-		}
-		if seenIDs[record.ID] {
-			return fmt.Errorf("duplicate ID: %d", record.ID)
-		}
-		seenIDs[record.ID] = true
+func (p *Processor) CleanInput(input string) string {
+	trimmed := strings.TrimSpace(input)
+	if p.allowedPattern != nil {
+		return p.allowedPattern.FindString(trimmed)
 	}
-	return nil
+	return trimmed
 }
 
-func CalculateTotalValue(records []Record) float64 {
-	var total float64
-	for _, record := range records {
-		total += record.Value
+func (p *Processor) Validate(input string) bool {
+	if input == "" {
+		return false
 	}
-	return total
+	if p.allowedPattern != nil {
+		return p.allowedPattern.MatchString(input)
+	}
+	return true
+}
+
+func (p *Processor) Process(input string) (string, bool) {
+	cleaned := p.CleanInput(input)
+	valid := p.Validate(cleaned)
+	return cleaned, valid
 }
