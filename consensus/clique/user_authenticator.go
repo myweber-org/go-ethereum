@@ -20,13 +20,15 @@ func AuthMiddleware(next http.Handler) http.Handler {
             return
         }
 
-        tokenString := strings.TrimPrefix(authHeader, "Bearer ")
-        if tokenString == authHeader {
-            http.Error(w, "Bearer token required", http.StatusUnauthorized)
+        parts := strings.Split(authHeader, " ")
+        if len(parts) != 2 || parts[0] != "Bearer" {
+            http.Error(w, "Invalid authorization format", http.StatusUnauthorized)
             return
         }
 
+        tokenString := parts[1]
         claims := &Claims{}
+
         token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
             return []byte("your-secret-key"), nil
         })
