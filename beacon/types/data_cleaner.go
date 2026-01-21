@@ -137,3 +137,74 @@ func main() {
 		fmt.Printf("Valid: %s <%s>\n", record.Name, record.Email)
 	}
 }
+package main
+
+import (
+	"fmt"
+	"strings"
+)
+
+type DataRecord struct {
+	ID    int
+	Name  string
+	Email string
+	Valid bool
+}
+
+func DeduplicateRecords(records []DataRecord) []DataRecord {
+	seen := make(map[string]bool)
+	var unique []DataRecord
+
+	for _, record := range records {
+		key := fmt.Sprintf("%s|%s", record.Name, record.Email)
+		if !seen[key] {
+			seen[key] = true
+			unique = append(unique, record)
+		}
+	}
+	return unique
+}
+
+func ValidateEmail(email string) bool {
+	if !strings.Contains(email, "@") {
+		return false
+	}
+	parts := strings.Split(email, "@")
+	if len(parts) != 2 {
+		return false
+	}
+	return len(parts[0]) > 0 && len(parts[1]) > 0 && strings.Contains(parts[1], ".")
+}
+
+func ValidateRecords(records []DataRecord) []DataRecord {
+	var valid []DataRecord
+	for _, record := range records {
+		if ValidateEmail(record.Email) && record.Name != "" {
+			record.Valid = true
+			valid = append(valid, record)
+		}
+	}
+	return valid
+}
+
+func CleanData(records []DataRecord) []DataRecord {
+	deduped := DeduplicateRecords(records)
+	validated := ValidateRecords(deduped)
+	return validated
+}
+
+func main() {
+	records := []DataRecord{
+		{1, "John Doe", "john@example.com", false},
+		{2, "Jane Smith", "jane@example.com", false},
+		{3, "John Doe", "john@example.com", false},
+		{4, "Bob", "invalid-email", false},
+		{5, "", "empty@example.com", false},
+	}
+
+	cleaned := CleanData(records)
+	fmt.Printf("Original: %d, Cleaned: %d\n", len(records), len(cleaned))
+	for _, r := range cleaned {
+		fmt.Printf("ID: %d, Name: %s, Email: %s\n", r.ID, r.Name, r.Email)
+	}
+}
