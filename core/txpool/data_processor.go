@@ -51,3 +51,50 @@ func main() {
 	}
 	fmt.Printf("Processed user: %+v\n", user)
 }
+package main
+
+import (
+	"errors"
+	"regexp"
+	"strings"
+)
+
+type UserData struct {
+	Email    string
+	Username string
+	Age      int
+}
+
+var emailRegex = regexp.MustCompile(`^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$`)
+
+func ValidateAndTransform(data UserData) (UserData, error) {
+	if !emailRegex.MatchString(data.Email) {
+		return UserData{}, errors.New("invalid email format")
+	}
+
+	if strings.TrimSpace(data.Username) == "" {
+		return UserData{}, errors.New("username cannot be empty")
+	}
+
+	if data.Age < 0 || data.Age > 150 {
+		return UserData{}, errors.New("age must be between 0 and 150")
+	}
+
+	transformedData := UserData{
+		Email:    strings.ToLower(strings.TrimSpace(data.Email)),
+		Username: strings.TrimSpace(data.Username),
+		Age:      data.Age,
+	}
+
+	return transformedData, nil
+}
+
+func ProcessUserInput(email, username string, age int) (UserData, error) {
+	userData := UserData{
+		Email:    email,
+		Username: username,
+		Age:      age,
+	}
+
+	return ValidateAndTransform(userData)
+}
