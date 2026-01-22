@@ -144,4 +144,101 @@ func main() {
 		logger.Write([]byte(message))
 		time.Sleep(10 * time.Millisecond)
 	}
+}package main
+
+import (
+    "fmt"
+    "os"
+    "path/filepath"
+    "time"
+)
+
+type Rotator struct {
+    FilePath    string
+    MaxSize     int64
+    MaxFiles    int
+    RotateEvery time.Duration
+    lastRotate  time.Time
+}
+
+func NewRotator(path string, maxSize int64, maxFiles int, rotateEvery time.Duration) *Rotator {
+    return &Rotator{
+        FilePath:    path,
+        MaxSize:     maxSize,
+        MaxFiles:    maxFiles,
+        RotateEvery: rotateEvery,
+        lastRotate:  time.Now(),
+    }
+}
+
+func (r *Rotator) Write(p []byte) (int, error) {
+    if err := r.maybeRotate(); err != nil {
+        return 0, err
+    }
+
+    f, err := os.OpenFile(r.FilePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+    if err != nil {
+        return 0, err
+    }
+    defer f.Close()
+
+    return f.Write(p)
+}
+
+func (r *Rotator) maybeRotate() error {
+    now := time.Now()
+    shouldRotate := false
+
+    if info, err := os.Stat(r.FilePath); err == nil {
+        if info.Size() >= r.MaxSize {
+            shouldRotate = true
+        }
+    }
+
+    if now.Sub(r.lastRotate) >= r.RotateEvery {
+        shouldRotate = true
+    }
+
+    if shouldRotate {
+        if err := r.performRotation(); err != nil {
+            return err
+        }
+        r.lastRotate = now
+    }
+    return nil
+}
+
+func (r *Rotator) performRotation() error {
+    for i := r.MaxFiles - 1; i > 0; i-- {
+        oldName := fmt.Sprintf("%s.%d", r.FilePath, i)
+        newName := fmt.Sprintf("%s.%d", r.FilePath, i+1)
+
+        if _, err := os.Stat(oldName); err == nil {
+            os.Rename(oldName, newName)
+        }
+    }
+
+    if _, err := os.Stat(r.FilePath); err == nil {
+        backupName := fmt.Sprintf("%s.1", r.FilePath)
+        os.Rename(r.FilePath, backupName)
+    }
+
+    return nil
+}
+
+func main() {
+    rotator := NewRotator(
+        filepath.Join("logs", "app.log"),
+        10*1024*1024,
+        5,
+        24*time.Hour,
+    )
+
+    for i := 0; i < 100; i++ {
+        msg := fmt.Sprintf("Log entry %d at %s\n", i, time.Now().Format(time.RFC3339))
+        rotator.Write([]byte(msg))
+        time.Sleep(100 * time.Millisecond)
+    }
+
+    fmt.Println("Log rotation example completed")
 }
