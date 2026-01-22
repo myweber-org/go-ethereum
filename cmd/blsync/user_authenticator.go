@@ -1,83 +1,4 @@
-package auth
-
-import (
-	"errors"
-	"time"
-
-	"github.com/golang-jwt/jwt/v4"
-)
-
-var (
-	ErrInvalidToken = errors.New("invalid token")
-	ErrExpiredToken = errors.New("token has expired")
-)
-
-type Claims struct {
-	UserID   string `json:"user_id"`
-	Username string `json:"username"`
-	jwt.RegisteredClaims
-}
-
-type Authenticator struct {
-	secretKey []byte
-	duration  time.Duration
-}
-
-func NewAuthenticator(secretKey string, duration time.Duration) *Authenticator {
-	return &Authenticator{
-		secretKey: []byte(secretKey),
-		duration:  duration,
-	}
-}
-
-func (a *Authenticator) GenerateToken(userID, username string) (string, error) {
-	expirationTime := time.Now().Add(a.duration)
-	claims := &Claims{
-		UserID:   userID,
-		Username: username,
-		RegisteredClaims: jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(expirationTime),
-			IssuedAt:  jwt.NewNumericDate(time.Now()),
-			Issuer:    "auth_service",
-		},
-	}
-
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	return token.SignedString(a.secretKey)
-}
-
-func (a *Authenticator) ValidateToken(tokenString string) (*Claims, error) {
-	claims := &Claims{}
-	token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
-		return a.secretKey, nil
-	})
-
-	if err != nil {
-		if errors.Is(err, jwt.ErrTokenExpired) {
-			return nil, ErrExpiredToken
-		}
-		return nil, ErrInvalidToken
-	}
-
-	if !token.Valid {
-		return nil, ErrInvalidToken
-	}
-
-	return claims, nil
-}
-
-func (a *Authenticator) RefreshToken(tokenString string) (string, error) {
-	claims, err := a.ValidateToken(tokenString)
-	if err != nil {
-		return "", err
-	}
-
-	if time.Until(claims.ExpiresAt.Time) > 30*time.Second {
-		return tokenString, nil
-	}
-
-	return a.GenerateToken(claims.UserID, claims.Username)
-}package middleware
+package middleware
 
 import (
 	"context"
@@ -103,8 +24,8 @@ func Authenticate(next http.Handler) http.Handler {
 			return
 		}
 
-		token := parts[1]
-		userID, err := validateToken(token)
+		tokenString := parts[1]
+		userID, err := validateToken(tokenString)
 		if err != nil {
 			http.Error(w, "Invalid token", http.StatusUnauthorized)
 			return
@@ -115,18 +36,20 @@ func Authenticate(next http.Handler) http.Handler {
 	})
 }
 
-func validateToken(token string) (string, error) {
-	// Simplified token validation logic
-	// In production, use proper JWT validation library
-	if token == "" || len(token) < 10 {
-		return "", http.ErrNoCookie
-	}
-	return "user_" + token[:8], nil
+func GetUserID(ctx context.Context) (string, bool) {
+	userID, ok := ctx.Value(userIDKey).(string)
+	return userID, ok
 }
 
-func GetUserID(ctx context.Context) string {
-	if userID, ok := ctx.Value(userIDKey).(string); ok {
-		return userID
+func validateToken(tokenString string) (string, error) {
+	// Simplified token validation - in production use a proper JWT library
+	// This is a placeholder implementation
+	if tokenString == "" || len(tokenString) < 10 {
+		return "", http.ErrAbortHandler
 	}
-	return ""
+	
+	// Mock validation - extract user ID from token
+	// In real implementation, parse JWT and verify signature
+	userID := "user_" + tokenString[:8]
+	return userID, nil
 }
