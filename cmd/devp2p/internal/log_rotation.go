@@ -107,4 +107,124 @@ func main() {
 	for i := 0; i < 10000; i++ {
 		log.Printf("Log entry number %d", i)
 	}
+}package main
+
+import (
+    "fmt"
+    "io"
+    "os"
+    "path/filepath"
+    "time"
+)
+
+type RotatingLogger struct {
+    currentFile   *os.File
+    basePath      string
+    maxSize       int64
+    rotationCount int
+    currentSize   int64
+}
+
+func NewRotatingLogger(basePath string, maxSize int64) (*RotatingLogger, error) {
+    logger := &RotatingLogger{
+        basePath: basePath,
+        maxSize:  maxSize,
+    }
+    
+    if err := logger.openCurrentFile(); err != nil {
+        return nil, err
+    }
+    
+    return logger, nil
+}
+
+func (rl *RotatingLogger) openCurrentFile() error {
+    if rl.currentFile != nil {
+        rl.currentFile.Close()
+    }
+    
+    filename := fmt.Sprintf("%s.%d.log", rl.basePath, rl.rotationCount)
+    file, err := os.OpenFile(filename, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+    if err != nil {
+        return err
+    }
+    
+    info, err := file.Stat()
+    if err != nil {
+        file.Close()
+        return err
+    }
+    
+    rl.currentFile = file
+    rl.currentSize = info.Size()
+    return nil
+}
+
+func (rl *RotatingLogger) rotateIfNeeded() error {
+    if rl.currentSize >= rl.maxSize {
+        rl.rotationCount++
+        return rl.openCurrentFile()
+    }
+    return nil
+}
+
+func (rl *RotatingLogger) Write(p []byte) (n int, err error) {
+    if err := rl.rotateIfNeeded(); err != nil {
+        return 0, err
+    }
+    
+    n, err = rl.currentFile.Write(p)
+    if err == nil {
+        rl.currentSize += int64(n)
+    }
+    return n, err
+}
+
+func (rl *RotatingLogger) Close() error {
+    if rl.currentFile != nil {
+        return rl.currentFile.Close()
+    }
+    return nil
+}
+
+func (rl *RotatingLogger) CleanupOldLogs(maxAge time.Duration) error {
+    files, err := filepath.Glob(rl.basePath + ".*.log")
+    if err != nil {
+        return err
+    }
+    
+    cutoff := time.Now().Add(-maxAge)
+    for _, file := range files {
+        info, err := os.Stat(file)
+        if err != nil {
+            continue
+        }
+        
+        if info.ModTime().Before(cutoff) {
+            os.Remove(file)
+        }
+    }
+    return nil
+}
+
+func main() {
+    logger, err := NewRotatingLogger("app", 1024*1024) // 1MB max size
+    if err != nil {
+        panic(err)
+    }
+    defer logger.Close()
+    
+    go func() {
+        ticker := time.NewTicker(24 * time.Hour)
+        defer ticker.Stop()
+        for range ticker.C {
+            logger.CleanupOldLogs(7 * 24 * time.Hour) // Keep logs for 7 days
+        }
+    }()
+    
+    for i := 0; i < 100; i++ {
+        msg := fmt.Sprintf("Log entry %d at %s\n", i, time.Now().Format(time.RFC3339))
+        logger.Write([]byte(msg))
+        time.Sleep(100 * time.Millisecond)
+    }
 }
