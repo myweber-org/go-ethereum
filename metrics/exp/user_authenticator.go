@@ -1,60 +1,80 @@
 package auth
 
 import (
-    "net/http"
-    "strings"
-    "time"
+	"errors"
+	"time"
 
-    "github.com/golang-jwt/jwt/v5"
+	"github.com/golang-jwt/jwt/v4"
+)
+
+var (
+	ErrInvalidToken = errors.New("invalid token")
+	ErrExpiredToken = errors.New("token has expired")
 )
 
 type Claims struct {
-    Username string `json:"username"`
-    Role     string `json:"role"`
-    jwt.RegisteredClaims
+	UserID string `json:"user_id"`
+	Email  string `json:"email"`
+	Role   string `json:"role"`
+	jwt.RegisteredClaims
 }
 
-var jwtKey = []byte("your_secret_key_here")
-
-func GenerateToken(username, role string) (string, error) {
-    expirationTime := time.Now().Add(24 * time.Hour)
-    claims := &Claims{
-        Username: username,
-        Role:     role,
-        RegisteredClaims: jwt.RegisteredClaims{
-            ExpiresAt: jwt.NewNumericDate(expirationTime),
-        },
-    }
-
-    token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-    return token.SignedString(jwtKey)
+type Authenticator struct {
+	secretKey []byte
 }
 
-func Authenticate(next http.HandlerFunc) http.HandlerFunc {
-    return func(w http.ResponseWriter, r *http.Request) {
-        authHeader := r.Header.Get("Authorization")
-        if authHeader == "" {
-            http.Error(w, "Authorization header required", http.StatusUnauthorized)
-            return
-        }
+func NewAuthenticator(secret string) *Authenticator {
+	return &Authenticator{secretKey: []byte(secret)}
+}
 
-        tokenString := strings.TrimPrefix(authHeader, "Bearer ")
-        claims := &Claims{}
+func (a *Authenticator) GenerateToken(userID, email, role string) (string, error) {
+	expirationTime := time.Now().Add(24 * time.Hour)
+	claims := &Claims{
+		UserID: userID,
+		Email:  email,
+		Role:   role,
+		RegisteredClaims: jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(expirationTime),
+			IssuedAt:  jwt.NewNumericDate(time.Now()),
+			Issuer:    "api-server",
+		},
+	}
 
-        token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
-            return jwtKey, nil
-        })
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	return token.SignedString(a.secretKey)
+}
 
-        if err != nil || !token.Valid {
-            http.Error(w, "Invalid token", http.StatusUnauthorized)
-            return
-        }
+func (a *Authenticator) ValidateToken(tokenString string) (*Claims, error) {
+	token, err := jwt.ParseWithClaims(tokenString, &Claims{}, func(token *jwt.Token) (interface{}, error) {
+		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, ErrInvalidToken
+		}
+		return a.secretKey, nil
+	})
 
-        if time.Until(claims.ExpiresAt.Time) < 0 {
-            http.Error(w, "Token expired", http.StatusUnauthorized)
-            return
-        }
+	if err != nil {
+		if errors.Is(err, jwt.ErrTokenExpired) {
+			return nil, ErrExpiredToken
+		}
+		return nil, ErrInvalidToken
+	}
 
-        next.ServeHTTP(w, r)
-    }
+	if claims, ok := token.Claims.(*Claims); ok && token.Valid {
+		return claims, nil
+	}
+
+	return nil, ErrInvalidToken
+}
+
+func (a *Authenticator) RefreshToken(tokenString string) (string, error) {
+	claims, err := a.ValidateToken(tokenString)
+	if err != nil {
+		return "", err
+	}
+
+	if time.Until(claims.ExpiresAt.Time) > 30*time.Minute {
+		return "", errors.New("token not eligible for refresh")
+	}
+
+	return a.GenerateToken(claims.UserID, claims.Email, claims.Role)
 }
