@@ -82,4 +82,49 @@ func parseInt(s string) (int, error) {
 	var result int
 	_, err := fmt.Sscanf(s, "%d", &result)
 	return result, err
+}package config
+
+import (
+    "os"
+    "strconv"
+)
+
+type Config struct {
+    ServerPort int
+    DatabaseURL string
+    DebugMode   bool
+    MaxWorkers  int
+}
+
+func LoadConfig() (*Config, error) {
+    cfg := &Config{
+        ServerPort: getEnvAsInt("SERVER_PORT", 8080),
+        DatabaseURL: getEnv("DATABASE_URL", "postgres://localhost:5432/app"),
+        DebugMode:   getEnvAsBool("DEBUG_MODE", false),
+        MaxWorkers:  getEnvAsInt("MAX_WORKERS", 10),
+    }
+    return cfg, nil
+}
+
+func getEnv(key, defaultValue string) string {
+    if value, exists := os.LookupEnv(key); exists {
+        return value
+    }
+    return defaultValue
+}
+
+func getEnvAsInt(key string, defaultValue int) int {
+    valueStr := getEnv(key, "")
+    if value, err := strconv.Atoi(valueStr); err == nil {
+        return value
+    }
+    return defaultValue
+}
+
+func getEnvAsBool(key string, defaultValue bool) bool {
+    valueStr := getEnv(key, "")
+    if value, err := strconv.ParseBool(valueStr); err == nil {
+        return value
+    }
+    return defaultValue
 }
