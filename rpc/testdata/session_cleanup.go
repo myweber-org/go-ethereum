@@ -51,3 +51,51 @@ func main() {
 
     select {}
 }
+package main
+
+import (
+	"log"
+	"time"
+)
+
+type Session struct {
+	ID        string
+	UserID    string
+	ExpiresAt time.Time
+}
+
+type SessionStore struct {
+	sessions map[string]Session
+}
+
+func NewSessionStore() *SessionStore {
+	return &SessionStore{
+		sessions: make(map[string]Session),
+	}
+}
+
+func (s *SessionStore) CleanExpiredSessions() {
+	now := time.Now()
+	for id, session := range s.sessions {
+		if session.ExpiresAt.Before(now) {
+			delete(s.sessions, id)
+			log.Printf("Removed expired session: %s", id)
+		}
+	}
+}
+
+func (s *SessionStore) StartCleanupJob(interval time.Duration) {
+	ticker := time.NewTicker(interval)
+	go func() {
+		for range ticker.C {
+			s.CleanExpiredSessions()
+		}
+	}()
+}
+
+func main() {
+	store := NewSessionStore()
+	store.StartCleanupJob(5 * time.Minute)
+
+	select {}
+}
