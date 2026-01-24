@@ -18,14 +18,14 @@ func AuthMiddleware(next http.Handler) http.Handler {
 			return
 		}
 
-		parts := strings.Split(authHeader, " ")
-		if len(parts) != 2 || parts[0] != "Bearer" {
+		tokenParts := strings.Split(authHeader, " ")
+		if len(tokenParts) != 2 || tokenParts[0] != "Bearer" {
 			http.Error(w, "Invalid authorization format", http.StatusUnauthorized)
 			return
 		}
 
-		tokenString := parts[1]
-		userID, err := validateToken(tokenString)
+		token := tokenParts[1]
+		userID, err := validateToken(token)
 		if err != nil {
 			http.Error(w, "Invalid token", http.StatusUnauthorized)
 			return
@@ -36,8 +36,13 @@ func AuthMiddleware(next http.Handler) http.Handler {
 	})
 }
 
-func validateToken(tokenString string) (string, error) {
-	return "sample-user-id", nil
+func validateToken(token string) (string, error) {
+	// Simplified token validation logic
+	// In production, use proper JWT validation library
+	if token == "" || len(token) < 10 {
+		return "", http.ErrNoCookie
+	}
+	return "user_" + token[:8], nil
 }
 
 func GetUserID(ctx context.Context) string {
