@@ -2,9 +2,9 @@ package config
 
 import (
 	"os"
-	"strings"
+	"path/filepath"
 
-	"gopkg.in/yaml.v2"
+	"gopkg.in/yaml.v3"
 )
 
 type Config struct {
@@ -13,55 +13,65 @@ type Config struct {
 		Port int    `yaml:"port" env:"SERVER_PORT"`
 	} `yaml:"server"`
 	Database struct {
-		URL      string `yaml:"url" env:"DB_URL"`
-		MaxConns int    `yaml:"max_connections" env:"DB_MAX_CONNS"`
+		Host     string `yaml:"host" env:"DB_HOST"`
+		Port     int    `yaml:"port" env:"DB_PORT"`
+		Name     string `yaml:"name" env:"DB_NAME"`
+		User     string `yaml:"user" env:"DB_USER"`
+		Password string `yaml:"password" env:"DB_PASSWORD"`
 	} `yaml:"database"`
-	LogLevel string `yaml:"log_level" env:"LOG_LEVEL"`
+	Logging struct {
+		Level  string `yaml:"level" env:"LOG_LEVEL"`
+		Output string `yaml:"output" env:"LOG_OUTPUT"`
+	} `yaml:"logging"`
 }
 
-func LoadConfig(path string) (*Config, error) {
-	config := &Config{}
-
-	file, err := os.Open(path)
+func LoadConfig(configPath string) (*Config, error) {
+	absPath, err := filepath.Abs(configPath)
 	if err != nil {
 		return nil, err
 	}
-	defer file.Close()
 
-	decoder := yaml.NewDecoder(file)
-	if err := decoder.Decode(config); err != nil {
+	data, err := os.ReadFile(absPath)
+	if err != nil {
 		return nil, err
 	}
 
-	overrideWithEnv(config)
+	var cfg Config
+	if err := yaml.Unmarshal(data, &cfg); err != nil {
+		return nil, err
+	}
 
-	return config, nil
+	overrideFromEnv(&cfg)
+	return &cfg, nil
 }
 
-func overrideWithEnv(c *Config) {
-	if val := os.Getenv("SERVER_HOST"); val != "" {
-		c.Server.Host = val
-	}
-	if val := os.Getenv("SERVER_PORT"); val != "" {
-		if port, err := parseInt(val); err == nil {
-			c.Server.Port = port
-		}
-	}
-	if val := os.Getenv("DB_URL"); val != "" {
-		c.Database.URL = val
-	}
-	if val := os.Getenv("DB_MAX_CONNS"); val != "" {
-		if maxConns, err := parseInt(val); err == nil {
-			c.Database.MaxConns = maxConns
-		}
-	}
-	if val := os.Getenv("LOG_LEVEL"); val != "" {
-		c.LogLevel = strings.ToUpper(val)
-	}
+func overrideFromEnv(cfg *Config) {
+	cfg.Server.Host = getEnvOrDefault("SERVER_HOST", cfg.Server.Host)
+	cfg.Server.Port = getEnvIntOrDefault("SERVER_PORT", cfg.Server.Port)
+
+	cfg.Database.Host = getEnvOrDefault("DB_HOST", cfg.Database.Host)
+	cfg.Database.Port = getEnvIntOrDefault("DB_PORT", cfg.Database.Port)
+	cfg.Database.Name = getEnvOrDefault("DB_NAME", cfg.Database.Name)
+	cfg.Database.User = getEnvOrDefault("DB_USER", cfg.Database.User)
+	cfg.Database.Password = getEnvOrDefault("DB_PASSWORD", cfg.Database.Password)
+
+	cfg.Logging.Level = getEnvOrDefault("LOG_LEVEL", cfg.Logging.Level)
+	cfg.Logging.Output = getEnvOrDefault("LOG_OUTPUT", cfg.Logging.Output)
 }
 
-func parseInt(s string) (int, error) {
-	var i int
-	_, err := fmt.Sscanf(s, "%d", &i)
-	return i, err
+func getEnvOrDefault(key, defaultValue string) string {
+	if value := os.Getenv(key); value != "" {
+		return value
+	}
+	return defaultValue
+}
+
+func getEnvIntOrDefault(key string, defaultValue int) int {
+	if value := os.Getenv(key); value != "" {
+		var result int
+		if _, err := fmt.Sscanf(value, "%d", &result); err == nil {
+			return result
+		}
+	}
+	return defaultValue
 }
