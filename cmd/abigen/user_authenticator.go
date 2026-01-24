@@ -1,4 +1,4 @@
-package auth
+package middleware
 
 import (
 	"context"
@@ -24,8 +24,8 @@ func Authenticate(next http.Handler) http.Handler {
 			return
 		}
 
-		token := parts[1]
-		userID, err := validateToken(token)
+		tokenString := parts[1]
+		userID, err := validateToken(tokenString)
 		if err != nil {
 			http.Error(w, "Invalid token", http.StatusUnauthorized)
 			return
@@ -41,14 +41,14 @@ func GetUserID(ctx context.Context) (string, bool) {
 	return userID, ok
 }
 
-func validateToken(token string) (string, error) {
-	// In a real implementation, this would validate JWT tokens
-	// For this example, we'll simulate validation
-	if token == "" || len(token) < 10 {
-		return "", http.ErrAbortHandler
+func validateToken(tokenString string) (string, error) {
+	// Token validation logic would go here
+	// For this example, we'll assume a simple validation
+	if tokenString == "" {
+		return "", http.ErrNoCookie
 	}
 	
-	// Simulate extracting user ID from token
-	// In reality, this would decode and verify the JWT
-	return "user_" + token[:8], nil
+	// In real implementation, this would decode and verify JWT
+	// For now, return a mock user ID
+	return "user-123", nil
 }
