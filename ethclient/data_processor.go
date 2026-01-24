@@ -2,49 +2,44 @@
 package main
 
 import (
-    "encoding/json"
-    "fmt"
-    "os"
+	"regexp"
+	"strings"
 )
 
-type Config struct {
-    ServerAddress string `json:"server_address"`
-    Port          int    `json:"port"`
-    EnableLogging bool   `json:"enable_logging"`
-    MaxConnections int   `json:"max_connections"`
+type DataProcessor struct {
+	whitespaceRegex *regexp.Regexp
+	emailRegex      *regexp.Regexp
 }
 
-func LoadConfig(filename string) (*Config, error) {
-    file, err := os.Open(filename)
-    if err != nil {
-        return nil, fmt.Errorf("failed to open config file: %w", err)
-    }
-    defer file.Close()
-
-    var config Config
-    decoder := json.NewDecoder(file)
-    if err := decoder.Decode(&config); err != nil {
-        return nil, fmt.Errorf("failed to decode JSON: %w", err)
-    }
-
-    if config.ServerAddress == "" {
-        return nil, fmt.Errorf("server_address cannot be empty")
-    }
-    if config.Port <= 0 || config.Port > 65535 {
-        return nil, fmt.Errorf("port must be between 1 and 65535")
-    }
-    if config.MaxConnections < 1 {
-        return nil, fmt.Errorf("max_connections must be at least 1")
-    }
-
-    return &config, nil
+func NewDataProcessor() *DataProcessor {
+	return &DataProcessor{
+		whitespaceRegex: regexp.MustCompile(`\s+`),
+		emailRegex:      regexp.MustCompile(`^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$`),
+	}
 }
 
-func main() {
-    config, err := LoadConfig("config.json")
-    if err != nil {
-        fmt.Printf("Error loading config: %v\n", err)
-        os.Exit(1)
-    }
-    fmt.Printf("Loaded configuration: %+v\n", config)
+func (dp *DataProcessor) CleanString(input string) string {
+	trimmed := strings.TrimSpace(input)
+	return dp.whitespaceRegex.ReplaceAllString(trimmed, " ")
+}
+
+func (dp *DataProcessor) ValidateEmail(email string) bool {
+	return dp.emailRegex.MatchString(email)
+}
+
+func (dp *DataProcessor) NormalizeEmail(email string) (string, bool) {
+	cleaned := dp.CleanString(email)
+	normalized := strings.ToLower(cleaned)
+	return normalized, dp.ValidateEmail(normalized)
+}
+
+func (dp *DataProcessor) ProcessInputList(inputs []string) []string {
+	var results []string
+	for _, input := range inputs {
+		cleaned := dp.CleanString(input)
+		if cleaned != "" {
+			results = append(results, cleaned)
+		}
+	}
+	return results
 }
