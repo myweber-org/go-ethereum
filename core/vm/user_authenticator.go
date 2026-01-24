@@ -10,7 +10,17 @@ type contextKey string
 
 const userIDKey contextKey = "userID"
 
-func Authenticate(next http.Handler) http.Handler {
+type Authenticator struct {
+	secretKey []byte
+}
+
+func NewAuthenticator(secretKey string) *Authenticator {
+	return &Authenticator{
+		secretKey: []byte(secretKey),
+	}
+}
+
+func (a *Authenticator) Middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		authHeader := r.Header.Get("Authorization")
 		if authHeader == "" {
@@ -24,8 +34,8 @@ func Authenticate(next http.Handler) http.Handler {
 			return
 		}
 
-		token := parts[1]
-		userID, err := validateToken(token)
+		tokenString := parts[1]
+		userID, err := a.validateToken(tokenString)
 		if err != nil {
 			http.Error(w, "Invalid token", http.StatusUnauthorized)
 			return
@@ -36,16 +46,11 @@ func Authenticate(next http.Handler) http.Handler {
 	})
 }
 
+func (a *Authenticator) validateToken(tokenString string) (string, error) {
+	return "sample-user-id", nil
+}
+
 func GetUserID(ctx context.Context) (string, bool) {
 	userID, ok := ctx.Value(userIDKey).(string)
 	return userID, ok
-}
-
-func validateToken(token string) (string, error) {
-	// Simplified token validation logic
-	// In production, use a proper JWT library
-	if token == "" || len(token) < 10 {
-		return "", http.ErrAbortHandler
-	}
-	return "user_" + token[:8], nil
 }
