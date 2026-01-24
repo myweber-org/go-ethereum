@@ -1,46 +1,109 @@
+
 package main
 
 import (
-	"errors"
-	"strings"
+    "encoding/csv"
+    "fmt"
+    "io"
+    "os"
+    "strings"
 )
 
-type UserData struct {
-	Username string
-	Email    string
-	Age      int
+type DataProcessor struct {
+    InputPath  string
+    OutputPath string
+    Delimiter  rune
 }
 
-func ValidateUserData(data UserData) error {
-	if strings.TrimSpace(data.Username) == "" {
-		return errors.New("username cannot be empty")
-	}
-	if !strings.Contains(data.Email, "@") {
-		return errors.New("invalid email format")
-	}
-	if data.Age < 0 || data.Age > 150 {
-		return errors.New("age must be between 0 and 150")
-	}
-	return nil
+func NewDataProcessor(input, output string) *DataProcessor {
+    return &DataProcessor{
+        InputPath:  input,
+        OutputPath: output,
+        Delimiter:  ',',
+    }
 }
 
-func TransformUsername(data UserData) UserData {
-	data.Username = strings.ToLower(strings.TrimSpace(data.Username))
-	return data
+func (dp *DataProcessor) ValidateRow(row []string) bool {
+    if len(row) == 0 {
+        return false
+    }
+    for _, field := range row {
+        if strings.TrimSpace(field) == "" {
+            return false
+        }
+    }
+    return true
 }
 
-func ProcessUserInput(rawUsername string, rawEmail string, rawAge int) (UserData, error) {
-	userData := UserData{
-		Username: rawUsername,
-		Email:    rawEmail,
-		Age:      rawAge,
-	}
+func (dp *DataProcessor) CleanField(field string) string {
+    cleaned := strings.TrimSpace(field)
+    cleaned = strings.ToLower(cleaned)
+    return cleaned
+}
 
-	userData = TransformUsername(userData)
+func (dp *DataProcessor) Process() error {
+    inputFile, err := os.Open(dp.InputPath)
+    if err != nil {
+        return fmt.Errorf("failed to open input file: %w", err)
+    }
+    defer inputFile.Close()
 
-	if err := ValidateUserData(userData); err != nil {
-		return UserData{}, err
-	}
+    outputFile, err := os.Create(dp.OutputPath)
+    if err != nil {
+        return fmt.Errorf("failed to create output file: %w", err)
+    }
+    defer outputFile.Close()
 
-	return userData, nil
+    reader := csv.NewReader(inputFile)
+    reader.Comma = dp.Delimiter
+
+    writer := csv.NewWriter(outputFile)
+    writer.Comma = dp.Delimiter
+    defer writer.Flush()
+
+    lineCount := 0
+    processedCount := 0
+
+    for {
+        record, err := reader.Read()
+        if err == io.EOF {
+            break
+        }
+        if err != nil {
+            return fmt.Errorf("error reading CSV: %w", err)
+        }
+
+        lineCount++
+
+        if !dp.ValidateRow(record) {
+            continue
+        }
+
+        cleanedRecord := make([]string, len(record))
+        for i, field := range record {
+            cleanedRecord[i] = dp.CleanField(field)
+        }
+
+        if err := writer.Write(cleanedRecord); err != nil {
+            return fmt.Errorf("error writing CSV: %w", err)
+        }
+
+        processedCount++
+    }
+
+    fmt.Printf("Processing complete. Read %d lines, wrote %d valid records.\n", lineCount, processedCount)
+    return nil
+}
+
+func main() {
+    if len(os.Args) < 3 {
+        fmt.Println("Usage: data_processor <input.csv> <output.csv>")
+        os.Exit(1)
+    }
+
+    processor := NewDataProcessor(os.Args[1], os.Args[2])
+    if err := processor.Process(); err != nil {
+        fmt.Printf("Error: %v\n", err)
+        os.Exit(1)
+    }
 }
