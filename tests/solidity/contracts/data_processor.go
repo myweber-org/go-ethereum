@@ -1,75 +1,43 @@
-package main
+package data_processor
 
 import (
 	"errors"
 	"regexp"
 	"strings"
-	"time"
+	"unicode"
 )
 
-type UserProfile struct {
-	ID        int
-	Username  string
-	Email     string
-	BirthDate string
-	CreatedAt time.Time
+func ValidateEmail(email string) bool {
+	pattern := `^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$`
+	matched, _ := regexp.MatchString(pattern, email)
+	return matched
 }
 
-func ValidateUsername(username string) error {
-	if len(username) < 3 || len(username) > 20 {
-		return errors.New("username must be between 3 and 20 characters")
+func SanitizeInput(input string) string {
+	input = strings.TrimSpace(input)
+	var builder strings.Builder
+	for _, r := range input {
+		if unicode.IsPrint(r) && !unicode.IsControl(r) {
+			builder.WriteRune(r)
+		}
 	}
-	validPattern := regexp.MustCompile(`^[a-zA-Z0-9_]+$`)
-	if !validPattern.MatchString(username) {
-		return errors.New("username can only contain letters, numbers, and underscores")
-	}
-	return nil
+	return builder.String()
 }
 
-func ValidateEmail(email string) error {
-	emailPattern := regexp.MustCompile(`^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$`)
-	if !emailPattern.MatchString(email) {
-		return errors.New("invalid email format")
-	}
-	return nil
+func TransformToSlug(text string) string {
+	text = strings.ToLower(text)
+	text = regexp.MustCompile(`[^a-z0-9]+`).ReplaceAllString(text, "-")
+	text = strings.Trim(text, "-")
+	return text
 }
 
-func TransformUsername(username string) string {
-	return strings.ToLower(strings.TrimSpace(username))
-}
-
-func CalculateAge(birthDate string) (int, error) {
-	parsedDate, err := time.Parse("2006-01-02", birthDate)
-	if err != nil {
-		return 0, errors.New("invalid date format, use YYYY-MM-DD")
+func ExtractDomain(email string) (string, error) {
+	if !ValidateEmail(email) {
+		return "", errors.New("invalid email format")
 	}
-	now := time.Now()
-	age := now.Year() - parsedDate.Year()
-	if now.YearDay() < parsedDate.YearDay() {
-		age--
+	parts := strings.Split(email, "@")
+	if len(parts) != 2 {
+		return "", errors.New("malformed email address")
 	}
-	if age < 0 {
-		return 0, errors.New("birth date cannot be in the future")
-	}
-	return age, nil
-}
-
-func ProcessUserProfile(profile UserProfile) (UserProfile, error) {
-	transformedUsername := TransformUsername(profile.Username)
-	profile.Username = transformedUsername
-
-	if err := ValidateUsername(profile.Username); err != nil {
-		return profile, err
-	}
-
-	if err := ValidateEmail(profile.Email); err != nil {
-		return profile, err
-	}
-
-	_, err := CalculateAge(profile.BirthDate)
-	if err != nil {
-		return profile, err
-	}
-
-	return profile, nil
+	return parts[1], nil
 }
