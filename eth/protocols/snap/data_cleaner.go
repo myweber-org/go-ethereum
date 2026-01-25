@@ -1,45 +1,23 @@
-
 package main
 
-import (
-	"fmt"
-	"sort"
-)
+import "fmt"
 
-type DataRecord struct {
-	ID   int
-	Name string
-}
+func RemoveDuplicates(input []string) []string {
+	seen := make(map[string]struct{})
+	result := []string{}
 
-func cleanData(records []DataRecord) []DataRecord {
-	seen := make(map[int]bool)
-	var unique []DataRecord
-
-	for _, record := range records {
-		if !seen[record.ID] {
-			seen[record.ID] = true
-			unique = append(unique, record)
+	for _, item := range input {
+		if _, exists := seen[item]; !exists {
+			seen[item] = struct{}{}
+			result = append(result, item)
 		}
 	}
-
-	sort.Slice(unique, func(i, j int) bool {
-		return unique[i].ID < unique[j].ID
-	})
-
-	return unique
+	return result
 }
 
 func main() {
-	data := []DataRecord{
-		{ID: 3, Name: "Charlie"},
-		{ID: 1, Name: "Alice"},
-		{ID: 2, Name: "Bob"},
-		{ID: 1, Name: "Alice"},
-		{ID: 4, Name: "David"},
-	}
-
-	cleaned := cleanData(data)
-	for _, record := range cleaned {
-		fmt.Printf("ID: %d, Name: %s\n", record.ID, record.Name)
-	}
+	data := []string{"apple", "banana", "apple", "cherry", "banana", "date"}
+	cleaned := RemoveDuplicates(data)
+	fmt.Println("Original:", data)
+	fmt.Println("Cleaned:", cleaned)
 }
