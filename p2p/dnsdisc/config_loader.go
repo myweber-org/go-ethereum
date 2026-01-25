@@ -72,4 +72,71 @@ func overrideInt(field *int, envVar string) {
 			*field = intVal
 		}
 	}
+}package config
+
+import (
+	"os"
+	"strconv"
+	"strings"
+)
+
+type Config struct {
+	ServerPort int
+	DBHost     string
+	DBPort     int
+	DebugMode  bool
+	APIKeys    []string
+}
+
+func Load() (*Config, error) {
+	cfg := &Config{}
+	var err error
+
+	cfg.ServerPort, err = getInt("SERVER_PORT", 8080)
+	if err != nil {
+		return nil, err
+	}
+
+	cfg.DBHost = getString("DB_HOST", "localhost")
+	cfg.DBPort, err = getInt("DB_PORT", 5432)
+	if err != nil {
+		return nil, err
+	}
+
+	cfg.DebugMode, err = getBool("DEBUG_MODE", false)
+	if err != nil {
+		return nil, err
+	}
+
+	cfg.APIKeys = getStringSlice("API_KEYS", []string{})
+
+	return cfg, nil
+}
+
+func getString(key, defaultValue string) string {
+	if value := os.Getenv(key); value != "" {
+		return value
+	}
+	return defaultValue
+}
+
+func getInt(key string, defaultValue int) (int, error) {
+	if value := os.Getenv(key); value != "" {
+		return strconv.Atoi(value)
+	}
+	return defaultValue, nil
+}
+
+func getBool(key string, defaultValue bool) (bool, error) {
+	if value := os.Getenv(key); value != "" {
+		return strconv.ParseBool(value)
+	}
+	return defaultValue, nil
+}
+
+func getStringSlice(key string, defaultValue []string) []string {
+	if value := os.Getenv(key); value != "" {
+		return strings.Split(value, ",")
+	}
+	return defaultValue
 }
