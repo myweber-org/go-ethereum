@@ -4,22 +4,22 @@ import (
 	"errors"
 	"time"
 
-	"github.com/golang-jwt/jwt/v5"
+	"github.com/golang-jwt/jwt/v4"
 )
 
 var secretKey = []byte("your-secret-key-change-in-production")
 
 type Claims struct {
-	UserID   string `json:"user_id"`
 	Username string `json:"username"`
+	UserID   int    `json:"user_id"`
 	jwt.RegisteredClaims
 }
 
-func GenerateToken(userID, username string) (string, error) {
+func GenerateToken(username string, userID int) (string, error) {
 	expirationTime := time.Now().Add(24 * time.Hour)
 	claims := &Claims{
-		UserID:   userID,
 		Username: username,
+		UserID:   userID,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(expirationTime),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
