@@ -43,4 +43,94 @@ func (c *Config) Validate() error {
         return fmt.Errorf("database name cannot be empty")
     }
     return nil
+}package config
+
+import (
+	"errors"
+	"os"
+	"strconv"
+	"strings"
+)
+
+type AppConfig struct {
+	ServerPort int
+	DBHost     string
+	DBPort     int
+	DebugMode  bool
+	APIKeys    []string
+}
+
+func LoadConfig() (*AppConfig, error) {
+	cfg := &AppConfig{}
+	var err error
+
+	cfg.ServerPort, err = getIntEnv("SERVER_PORT", 8080)
+	if err != nil {
+		return nil, err
+	}
+
+	cfg.DBHost = getStringEnv("DB_HOST", "localhost")
+	
+	cfg.DBPort, err = getIntEnv("DB_PORT", 5432)
+	if err != nil {
+		return nil, err
+	}
+
+	cfg.DebugMode = getBoolEnv("DEBUG_MODE", false)
+	
+	apiKeysStr := getStringEnv("API_KEYS", "")
+	if apiKeysStr != "" {
+		cfg.APIKeys = strings.Split(apiKeysStr, ",")
+	}
+
+	if err := validateConfig(cfg); err != nil {
+		return nil, err
+	}
+
+	return cfg, nil
+}
+
+func getStringEnv(key, defaultValue string) string {
+	if value := os.Getenv(key); value != "" {
+		return value
+	}
+	return defaultValue
+}
+
+func getIntEnv(key string, defaultValue int) (int, error) {
+	if value := os.Getenv(key); value != "" {
+		intVal, err := strconv.Atoi(value)
+		if err != nil {
+			return 0, errors.New("invalid integer value for " + key)
+		}
+		return intVal, nil
+	}
+	return defaultValue, nil
+}
+
+func getBoolEnv(key string, defaultValue bool) bool {
+	if value := os.Getenv(key); value != "" {
+		boolVal, err := strconv.ParseBool(value)
+		if err != nil {
+			return defaultValue
+		}
+		return boolVal
+	}
+	return defaultValue
+}
+
+func validateConfig(cfg *AppConfig) error {
+	if cfg.ServerPort < 1 || cfg.ServerPort > 65535 {
+		return errors.New("invalid server port")
+	}
+	
+	if cfg.DBPort < 1 || cfg.DBPort > 65535 {
+		return errors.New("invalid database port")
+	}
+	
+	if cfg.DBHost == "" {
+		return errors.New("database host cannot be empty")
+	}
+	
+	return nil
 }
