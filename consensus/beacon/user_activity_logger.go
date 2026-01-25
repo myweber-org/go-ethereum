@@ -1,4 +1,3 @@
-
 package middleware
 
 import (
@@ -20,8 +19,6 @@ func (al *ActivityLogger) LogActivity(next http.Handler) http.Handler {
 		start := time.Now()
 		userAgent := r.UserAgent()
 		clientIP := r.RemoteAddr
-		method := r.Method
-		path := r.URL.Path
 
 		recorder := &responseRecorder{
 			ResponseWriter: w,
@@ -31,11 +28,14 @@ func (al *ActivityLogger) LogActivity(next http.Handler) http.Handler {
 		next.ServeHTTP(recorder, r)
 
 		duration := time.Since(start)
-		status := recorder.statusCode
-
 		al.Logger.Printf(
-			"Activity: %s %s | Status: %d | Duration: %v | IP: %s | Agent: %s",
-			method, path, status, duration, clientIP, userAgent,
+			"Method: %s | Path: %s | Status: %d | Duration: %v | IP: %s | Agent: %s",
+			r.Method,
+			r.URL.Path,
+			recorder.statusCode,
+			duration,
+			clientIP,
+			userAgent,
 		)
 	})
 }
