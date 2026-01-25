@@ -31,3 +31,35 @@ func main() {
     movingAvg := calculateMovingAverage(sampleData, window)
     fmt.Printf("Moving average (window=%d): %v\n", window, movingAvg)
 }
+package main
+
+import (
+    "regexp"
+    "strings"
+)
+
+type DataProcessor struct {
+    stripPattern *regexp.Regexp
+}
+
+func NewDataProcessor() *DataProcessor {
+    return &DataProcessor{
+        stripPattern: regexp.MustCompile(`[^a-zA-Z0-9\s\-_]`),
+    }
+}
+
+func (dp *DataProcessor) CleanInput(input string) string {
+    cleaned := dp.stripPattern.ReplaceAllString(input, "")
+    return strings.TrimSpace(cleaned)
+}
+
+func (dp *DataProcessor) ValidateLength(input string, min, max int) bool {
+    length := len(input)
+    return length >= min && length <= max
+}
+
+func (dp *DataProcessor) Process(input string, minLen, maxLen int) (string, bool) {
+    cleaned := dp.CleanInput(input)
+    isValid := dp.ValidateLength(cleaned, minLen, maxLen)
+    return cleaned, isValid
+}
