@@ -1,52 +1,62 @@
 package config
 
 import (
-	"os"
-	"strconv"
-	"strings"
+	"io/ioutil"
+	"log"
+
+	"gopkg.in/yaml.v2"
 )
 
-type Config struct {
-	ServerPort int
-	DBHost     string
-	DBPort     int
-	DebugMode  bool
-	APIKeys    []string
+type AppConfig struct {
+	Server struct {
+		Port    int    `yaml:"port"`
+		Host    string `yaml:"host"`
+		Timeout int    `yaml:"timeout"`
+	} `yaml:"server"`
+	Database struct {
+		Host     string `yaml:"host"`
+		Port     int    `yaml:"port"`
+		Username string `yaml:"username"`
+		Password string `yaml:"password"`
+		Name     string `yaml:"name"`
+	} `yaml:"database"`
+	Logging struct {
+		Level  string `yaml:"level"`
+		Output string `yaml:"output"`
+	} `yaml:"logging"`
 }
 
-func LoadConfig() (*Config, error) {
-	cfg := &Config{}
-
-	port, err := strconv.Atoi(getEnv("SERVER_PORT", "8080"))
+func LoadConfig(filename string) (*AppConfig, error) {
+	data, err := ioutil.ReadFile(filename)
 	if err != nil {
 		return nil, err
 	}
-	cfg.ServerPort = port
 
-	cfg.DBHost = getEnv("DB_HOST", "localhost")
-
-	dbPort, err := strconv.Atoi(getEnv("DB_PORT", "5432"))
+	var config AppConfig
+	err = yaml.Unmarshal(data, &config)
 	if err != nil {
 		return nil, err
 	}
-	cfg.DBPort = dbPort
 
-	debug, err := strconv.ParseBool(getEnv("DEBUG_MODE", "false"))
-	if err != nil {
-		return nil, err
-	}
-	cfg.DebugMode = debug
-
-	keys := strings.Split(getEnv("API_KEYS", ""), ",")
-	cfg.APIKeys = keys
-
-	return cfg, nil
+	return &config, nil
 }
 
-func getEnv(key, defaultValue string) string {
-	value := os.Getenv(key)
-	if value == "" {
-		return defaultValue
+func ValidateConfig(config *AppConfig) bool {
+	if config.Server.Port <= 0 || config.Server.Port > 65535 {
+		log.Printf("Invalid server port: %d", config.Server.Port)
+		return false
 	}
-	return value
+
+	if config.Database.Host == "" {
+		log.Print("Database host cannot be empty")
+		return false
+	}
+
+	if config.Logging.Level != "debug" && config.Logging.Level != "info" && 
+	   config.Logging.Level != "warn" && config.Logging.Level != "error" {
+		log.Printf("Invalid logging level: %s", config.Logging.Level)
+		return false
+	}
+
+	return true
 }
