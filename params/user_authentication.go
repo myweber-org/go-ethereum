@@ -10,9 +10,7 @@ import (
 
 type contextKey string
 
-const (
-	userIDKey contextKey = "userID"
-)
+const userIDKey contextKey = "userID"
 
 type Claims struct {
 	UserID string `json:"user_id"`
@@ -29,8 +27,8 @@ func AuthMiddleware(secretKey string) func(http.Handler) http.Handler {
 			}
 
 			parts := strings.Split(authHeader, " ")
-			if len(parts) != 2 || strings.ToLower(parts[0]) != "bearer" {
-				http.Error(w, "Invalid authorization header format", http.StatusUnauthorized)
+			if len(parts) != 2 || parts[0] != "Bearer" {
+				http.Error(w, "Invalid authorization format", http.StatusUnauthorized)
 				return
 			}
 
@@ -42,7 +40,7 @@ func AuthMiddleware(secretKey string) func(http.Handler) http.Handler {
 			})
 
 			if err != nil || !token.Valid {
-				http.Error(w, "Invalid or expired token", http.StatusUnauthorized)
+				http.Error(w, "Invalid token", http.StatusUnauthorized)
 				return
 			}
 
