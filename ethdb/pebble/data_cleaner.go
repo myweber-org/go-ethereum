@@ -59,3 +59,32 @@ func main() {
 		fmt.Printf("ID: %d, Email: %s, Valid: %v\n", record.ID, record.Email, record.Valid)
 	}
 }
+package main
+
+import (
+	"fmt"
+	"sort"
+)
+
+func cleanData(data []string) []string {
+	seen := make(map[string]struct{})
+	unique := []string{}
+
+	for _, item := range data {
+		if _, exists := seen[item]; !exists {
+			seen[item] = struct{}{}
+			unique = append(unique, item)
+		}
+	}
+
+	sort.Strings(unique)
+	return unique
+}
+
+func main() {
+	rawData := []string{"zebra", "apple", "banana", "apple", "cherry", "banana"}
+	cleaned := cleanData(rawData)
+
+	fmt.Println("Original:", rawData)
+	fmt.Println("Cleaned:", cleaned)
+}
