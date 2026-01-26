@@ -6,54 +6,57 @@ import (
 	"strings"
 )
 
-type DataRecord struct {
-	ID    int
-	Email string
-	Valid bool
+type DataCleaner struct {
+	seen map[string]bool
 }
 
-func DeduplicateRecords(records []DataRecord) []DataRecord {
-	seen := make(map[string]bool)
-	var unique []DataRecord
-	for _, record := range records {
-		key := strings.ToLower(strings.TrimSpace(record.Email))
-		if !seen[key] {
-			seen[key] = true
-			unique = append(unique, record)
+func NewDataCleaner() *DataCleaner {
+	return &DataCleaner{
+		seen: make(map[string]bool),
+	}
+}
+
+func (dc *DataCleaner) Normalize(input string) string {
+	return strings.ToLower(strings.TrimSpace(input))
+}
+
+func (dc *DataCleaner) IsDuplicate(value string) bool {
+	normalized := dc.Normalize(value)
+	if dc.seen[normalized] {
+		return true
+	}
+	dc.seen[normalized] = true
+	return false
+}
+
+func (dc *DataCleaner) Deduplicate(items []string) []string {
+	dc.seen = make(map[string]bool)
+	var result []string
+	for _, item := range items {
+		if !dc.IsDuplicate(item) {
+			result = append(result, item)
 		}
 	}
-	return unique
+	return result
 }
 
-func ValidateEmail(email string) bool {
-	if len(email) == 0 {
-		return false
-	}
-	return strings.Contains(email, "@") && strings.Contains(email, ".")
-}
-
-func CleanData(records []DataRecord) []DataRecord {
-	var cleaned []DataRecord
-	for _, record := range records {
-		if ValidateEmail(record.Email) {
-			record.Valid = true
-			cleaned = append(cleaned, record)
-		}
-	}
-	return DeduplicateRecords(cleaned)
+func (dc *DataCleaner) Reset() {
+	dc.seen = make(map[string]bool)
 }
 
 func main() {
-	records := []DataRecord{
-		{1, "user@example.com", false},
-		{2, "invalid-email", false},
-		{3, "user@example.com", false},
-		{4, "another@test.org", false},
-	}
-
-	cleaned := CleanData(records)
-	fmt.Printf("Original: %d, Cleaned: %d\n", len(records), len(cleaned))
-	for _, r := range cleaned {
-		fmt.Printf("ID: %d, Email: %s, Valid: %v\n", r.ID, r.Email, r.Valid)
-	}
+	cleaner := NewDataCleaner()
+	
+	data := []string{"Apple", "apple ", " BANANA", "banana", "Cherry"}
+	
+	fmt.Println("Original data:", data)
+	
+	deduped := cleaner.Deduplicate(data)
+	fmt.Println("After deduplication:", deduped)
+	
+	cleaner.Reset()
+	
+	testValue := "  TEST  "
+	normalized := cleaner.Normalize(testValue)
+	fmt.Printf("Normalized '%s' to '%s'\n", testValue, normalized)
 }
