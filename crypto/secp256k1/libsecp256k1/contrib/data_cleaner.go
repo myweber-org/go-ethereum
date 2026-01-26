@@ -1,53 +1,24 @@
+
 package main
 
-import (
-	"fmt"
-	"strings"
-)
+import "fmt"
 
-type DataRecord struct {
-	ID    int
-	Email string
-	Name  string
-}
+func RemoveDuplicates(input []int) []int {
+	seen := make(map[int]bool)
+	result := []int{}
 
-func normalizeEmail(email string) string {
-	return strings.ToLower(strings.TrimSpace(email))
-}
-
-func deduplicateRecords(records []DataRecord) []DataRecord {
-	seen := make(map[string]bool)
-	var unique []DataRecord
-
-	for _, record := range records {
-		normalizedEmail := normalizeEmail(record.Email)
-		if !seen[normalizedEmail] {
-			seen[normalizedEmail] = true
-			unique = append(unique, record)
+	for _, value := range input {
+		if !seen[value] {
+			seen[value] = true
+			result = append(result, value)
 		}
 	}
-	return unique
-}
-
-func printRecords(records []DataRecord) {
-	for _, r := range records {
-		fmt.Printf("ID: %d, Email: %s, Name: %s\n", r.ID, r.Email, r.Name)
-	}
+	return result
 }
 
 func main() {
-	records := []DataRecord{
-		{1, "  USER@Example.COM  ", "Alice"},
-		{2, "user@example.com", "Bob"},
-		{3, "test@domain.org", "Charlie"},
-		{4, "TEST@DOMAIN.ORG ", "David"},
-	}
-
-	fmt.Println("Original records:")
-	printRecords(records)
-
-	uniqueRecords := deduplicateRecords(records)
-
-	fmt.Println("\nDeduplicated records:")
-	printRecords(uniqueRecords)
+	data := []int{1, 2, 2, 3, 4, 4, 5, 1, 6}
+	cleaned := RemoveDuplicates(data)
+	fmt.Printf("Original: %v\n", data)
+	fmt.Printf("Cleaned: %v\n", cleaned)
 }
