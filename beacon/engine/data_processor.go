@@ -2,146 +2,23 @@
 package main
 
 import (
-	"encoding/csv"
 	"fmt"
-	"io"
-	"os"
-	"strings"
+	"sort"
 )
 
-type DataRecord struct {
-	ID      string
-	Name    string
-	Email   string
-	Active  string
-}
-
-func processCSVFile(filename string) ([]DataRecord, error) {
-	file, err := os.Open(filename)
-	if err != nil {
-		return nil, fmt.Errorf("failed to open file: %w", err)
-	}
-	defer file.Close()
-
-	reader := csv.NewReader(file)
-	reader.TrimLeadingSpace = true
-
-	var records []DataRecord
-	headerSkipped := false
-
-	for {
-		row, err := reader.Read()
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			return nil, fmt.Errorf("csv read error: %w", err)
-		}
-
-		if !headerSkipped {
-			headerSkipped = true
-			continue
-		}
-
-		if len(row) < 4 {
-			continue
-		}
-
-		record := DataRecord{
-			ID:     strings.TrimSpace(row[0]),
-			Name:   strings.TrimSpace(row[1]),
-			Email:  strings.TrimSpace(row[2]),
-			Active: strings.TrimSpace(row[3]),
-		}
-
-		if isValidRecord(record) {
-			records = append(records, record)
+func FilterAndSort(numbers []int, threshold int) []int {
+	var filtered []int
+	for _, num := range numbers {
+		if num > threshold {
+			filtered = append(filtered, num)
 		}
 	}
-
-	return records, nil
-}
-
-func isValidRecord(record DataRecord) bool {
-	if record.ID == "" || record.Name == "" {
-		return false
-	}
-	if !strings.Contains(record.Email, "@") {
-		return false
-	}
-	return record.Active == "true" || record.Active == "false"
-}
-
-func filterActiveRecords(records []DataRecord) []DataRecord {
-	var active []DataRecord
-	for _, record := range records {
-		if record.Active == "true" {
-			active = append(active, record)
-		}
-	}
-	return active
+	sort.Ints(filtered)
+	return filtered
 }
 
 func main() {
-	if len(os.Args) < 2 {
-		fmt.Println("Usage: data_processor <csv_file>")
-		return
-	}
-
-	records, err := processCSVFile(os.Args[1])
-	if err != nil {
-		fmt.Printf("Error processing file: %v\n", err)
-		return
-	}
-
-	activeRecords := filterActiveRecords(records)
-	fmt.Printf("Total records: %d\n", len(records))
-	fmt.Printf("Active records: %d\n", len(activeRecords))
-
-	for i, record := range activeRecords {
-		fmt.Printf("%d. %s <%s>\n", i+1, record.Name, record.Email)
-	}
-}
-package main
-
-import (
-	"regexp"
-	"strings"
-)
-
-func CleanInput(input string) string {
-	// Remove extra whitespace
-	re := regexp.MustCompile(`\s+`)
-	cleaned := re.ReplaceAllString(input, " ")
-	
-	// Trim spaces from start and end
-	cleaned = strings.TrimSpace(cleaned)
-	
-	// Convert to lowercase for consistency
-	cleaned = strings.ToLower(cleaned)
-	
-	return cleaned
-}
-
-func NormalizeString(input string) string {
-	cleaned := CleanInput(input)
-	
-	// Remove special characters except alphanumeric and spaces
-	re := regexp.MustCompile(`[^a-z0-9\s]`)
-	normalized := re.ReplaceAllString(cleaned, "")
-	
-	return normalized
-}
-
-func ProcessData(inputs []string) []string {
-	var results []string
-	
-	for _, input := range inputs {
-		processed := NormalizeString(input)
-		if processed != "" {
-			results = append(results, processed)
-		}
-	}
-	
-	return results
+	data := []int{45, 12, 89, 3, 67, 23, 9, 41}
+	result := FilterAndSort(data, 20)
+	fmt.Println("Filtered and sorted:", result)
 }
