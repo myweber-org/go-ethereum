@@ -1,0 +1,53 @@
+
+package main
+
+import (
+	"encoding/json"
+	"fmt"
+	"regexp"
+	"strings"
+)
+
+type UserData struct {
+	Email    string `json:"email"`
+	Username string `json:"username"`
+	Age      int    `json:"age"`
+}
+
+func validateEmail(email string) bool {
+	emailRegex := regexp.MustCompile(`^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$`)
+	return emailRegex.MatchString(email)
+}
+
+func sanitizeUsername(username string) string {
+	return strings.TrimSpace(username)
+}
+
+func processUserData(rawData []byte) (*UserData, error) {
+	var data UserData
+	if err := json.Unmarshal(rawData, &data); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal JSON: %w", err)
+	}
+
+	if !validateEmail(data.Email) {
+		return nil, fmt.Errorf("invalid email format: %s", data.Email)
+	}
+
+	data.Username = sanitizeUsername(data.Username)
+
+	if data.Age < 0 || data.Age > 150 {
+		return nil, fmt.Errorf("age out of valid range: %d", data.Age)
+	}
+
+	return &data, nil
+}
+
+func main() {
+	rawJSON := []byte(`{"email":"test@example.com","username":"  john_doe  ","age":25}`)
+	processedData, err := processUserData(rawJSON)
+	if err != nil {
+		fmt.Printf("Error processing data: %v\n", err)
+		return
+	}
+	fmt.Printf("Processed user data: %+v\n", processedData)
+}
