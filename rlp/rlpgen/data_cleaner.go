@@ -1,24 +1,32 @@
 
 package main
 
-import "fmt"
+import (
+	"strings"
+)
 
-func RemoveDuplicates(input []int) []int {
-	seen := make(map[int]bool)
-	result := []int{}
-
-	for _, value := range input {
-		if !seen[value] {
-			seen[value] = true
-			result = append(result, value)
+func RemoveDuplicates(slice []string) []string {
+	seen := make(map[string]bool)
+	result := []string{}
+	for _, item := range slice {
+		if !seen[item] {
+			seen[item] = true
+			result = append(result, item)
 		}
 	}
 	return result
 }
 
-func main() {
-	data := []int{1, 2, 2, 3, 4, 4, 5, 1, 6}
-	cleaned := RemoveDuplicates(data)
-	fmt.Println("Original:", data)
-	fmt.Println("Cleaned:", cleaned)
+func TrimSpaces(slice []string) []string {
+	result := make([]string, len(slice))
+	for i, item := range slice {
+		result[i] = strings.TrimSpace(item)
+	}
+	return result
+}
+
+func CleanData(data []string) []string {
+	trimmed := TrimSpaces(data)
+	cleaned := RemoveDuplicates(trimmed)
+	return cleaned
 }
