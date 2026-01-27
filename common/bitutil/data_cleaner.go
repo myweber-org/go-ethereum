@@ -73,3 +73,17 @@ func main() {
 	valid, invalid := cleaner.ValidateEmails()
 	fmt.Printf("Valid emails: %d, Invalid emails: %d\n", len(valid), len(invalid))
 }
+package utils
+
+func DeduplicateStrings(slice []string) []string {
+	seen := make(map[string]struct{})
+	result := []string{}
+
+	for _, item := range slice {
+		if _, exists := seen[item]; !exists {
+			seen[item] = struct{}{}
+			result = append(result, item)
+		}
+	}
+	return result
+}
