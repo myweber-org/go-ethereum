@@ -1,3 +1,4 @@
+
 package main
 
 import (
@@ -5,78 +6,108 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"strings"
+	"sort"
 )
 
-func cleanCSV(inputPath, outputPath string) error {
-	inFile, err := os.Open(inputPath)
+type DataRecord struct {
+	ID   string
+	Name string
+	Age  string
+}
+
+func readCSV(filename string) ([]DataRecord, error) {
+	file, err := os.Open(filename)
 	if err != nil {
-		return fmt.Errorf("failed to open input file: %w", err)
+		return nil, err
 	}
-	defer inFile.Close()
+	defer file.Close()
 
-	outFile, err := os.Create(outputPath)
-	if err != nil {
-		return fmt.Errorf("failed to create output file: %w", err)
-	}
-	defer outFile.Close()
-
-	reader := csv.NewReader(inFile)
-	writer := csv.NewWriter(outFile)
-	defer writer.Flush()
-
-	headers, err := reader.Read()
-	if err != nil {
-		return fmt.Errorf("failed to read headers: %w", err)
-	}
-
-	cleanedHeaders := make([]string, len(headers))
-	for i, h := range headers {
-		cleanedHeaders[i] = strings.TrimSpace(strings.ToLower(h))
-	}
-	if err := writer.Write(cleanedHeaders); err != nil {
-		return fmt.Errorf("failed to write headers: %w", err)
-	}
+	reader := csv.NewReader(file)
+	var records []DataRecord
 
 	for {
-		record, err := reader.Read()
+		row, err := reader.Read()
 		if err == io.EOF {
 			break
 		}
 		if err != nil {
-			return fmt.Errorf("failed to read record: %w", err)
+			return nil, err
 		}
-
-		cleanedRecord := make([]string, len(record))
-		for i, field := range record {
-			cleanedField := strings.TrimSpace(field)
-			if cleanedField == "" {
-				cleanedField = "N/A"
-			}
-			cleanedRecord[i] = cleanedField
-		}
-
-		if err := writer.Write(cleanedRecord); err != nil {
-			return fmt.Errorf("failed to write record: %w", err)
+		if len(row) >= 3 {
+			records = append(records, DataRecord{
+				ID:   row[0],
+				Name: row[1],
+				Age:  row[2],
+			})
 		}
 	}
+	return records, nil
+}
 
+func removeDuplicates(records []DataRecord) []DataRecord {
+	seen := make(map[string]bool)
+	var unique []DataRecord
+
+	for _, record := range records {
+		key := record.ID + "|" + record.Name
+		if !seen[key] {
+			seen[key] = true
+			unique = append(unique, record)
+		}
+	}
+	return unique
+}
+
+func sortByAge(records []DataRecord) []DataRecord {
+	sorted := make([]DataRecord, len(records))
+	copy(sorted, records)
+
+	sort.Slice(sorted, func(i, j int) bool {
+		return sorted[i].Age < sorted[j].Age
+	})
+	return sorted
+}
+
+func writeCSV(filename string, records []DataRecord) error {
+	file, err := os.Create(filename)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	writer := csv.NewWriter(file)
+	defer writer.Flush()
+
+	for _, record := range records {
+		row := []string{record.ID, record.Name, record.Age}
+		if err := writer.Write(row); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
 func main() {
-	if len(os.Args) != 3 {
-		fmt.Println("Usage: data_cleaner <input.csv> <output.csv>")
-		os.Exit(1)
+	inputFile := "input.csv"
+	outputFile := "cleaned_data.csv"
+
+	records, err := readCSV(inputFile)
+	if err != nil {
+		fmt.Printf("Error reading CSV: %v\n", err)
+		return
 	}
 
-	inputFile := os.Args[1]
-	outputFile := os.Args[2]
+	fmt.Printf("Original records: %d\n", len(records))
 
-	if err := cleanCSV(inputFile, outputFile); err != nil {
-		fmt.Printf("Error: %v\n", err)
-		os.Exit(1)
+	uniqueRecords := removeDuplicates(records)
+	fmt.Printf("After duplicate removal: %d\n", len(uniqueRecords))
+
+	sortedRecords := sortByAge(uniqueRecords)
+
+	if err := writeCSV(outputFile, sortedRecords); err != nil {
+		fmt.Printf("Error writing CSV: %v\n", err)
+		return
 	}
 
-	fmt.Printf("Successfully cleaned data. Output saved to %s\n", outputFile)
+	fmt.Printf("Cleaned data written to %s\n", outputFile)
 }
