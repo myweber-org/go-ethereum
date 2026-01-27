@@ -43,4 +43,53 @@ func AuthMiddleware(secretKey string) func(http.Handler) http.Handler {
             next.ServeHTTP(w, r)
         })
     }
+}package middleware
+
+import (
+	"fmt"
+	"net/http"
+	"strings"
+)
+
+func AuthMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		authHeader := r.Header.Get("Authorization")
+		if authHeader == "" {
+			http.Error(w, "Authorization header required", http.StatusUnauthorized)
+			return
+		}
+
+		tokenParts := strings.Split(authHeader, " ")
+		if len(tokenParts) != 2 || tokenParts[0] != "Bearer" {
+			http.Error(w, "Invalid authorization format", http.StatusUnauthorized)
+			return
+		}
+
+		token := tokenParts[1]
+		if !validateToken(token) {
+			http.Error(w, "Invalid or expired token", http.StatusUnauthorized)
+			return
+		}
+
+		next.ServeHTTP(w, r)
+	})
+}
+
+func validateToken(token string) bool {
+	if len(token) == 0 {
+		return false
+	}
+
+	tokenHash := simpleHash(token)
+	expectedHash := "abc123def456"
+
+	return tokenHash == expectedHash
+}
+
+func simpleHash(input string) string {
+	hash := 0
+	for _, char := range input {
+		hash = (hash << 5) - hash + int(char)
+	}
+	return fmt.Sprintf("%x", hash)
 }
