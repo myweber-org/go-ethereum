@@ -114,4 +114,89 @@ func main() {
 	os.Remove("sample.txt")
 	os.Remove("encrypted.bin")
 	os.Remove("decrypted.txt")
+}package main
+
+import (
+	"crypto/aes"
+	"crypto/cipher"
+	"crypto/rand"
+	"encoding/base64"
+	"fmt"
+	"io"
+	"os"
+)
+
+func encryptString(plainText string, key []byte) (string, error) {
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		return "", err
+	}
+
+	ciphertext := make([]byte, aes.BlockSize+len(plainText))
+	iv := ciphertext[:aes.BlockSize]
+	if _, err := io.ReadFull(rand.Reader, iv); err != nil {
+		return "", err
+	}
+
+	stream := cipher.NewCFBEncrypter(block, iv)
+	stream.XORKeyStream(ciphertext[aes.BlockSize:], []byte(plainText))
+
+	return base64.StdEncoding.EncodeToString(ciphertext), nil
+}
+
+func decryptString(cipherText string, key []byte) (string, error) {
+	decoded, err := base64.StdEncoding.DecodeString(cipherText)
+	if err != nil {
+		return "", err
+	}
+
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		return "", err
+	}
+
+	if len(decoded) < aes.BlockSize {
+		return "", fmt.Errorf("ciphertext too short")
+	}
+
+	iv := decoded[:aes.BlockSize]
+	decoded = decoded[aes.BlockSize:]
+
+	stream := cipher.NewCFBDecrypter(block, iv)
+	stream.XORKeyStream(decoded, decoded)
+
+	return string(decoded), nil
+}
+
+func generateKey() ([]byte, error) {
+	key := make([]byte, 32)
+	if _, err := io.ReadFull(rand.Reader, key); err != nil {
+		return nil, err
+	}
+	return key, nil
+}
+
+func main() {
+	key, err := generateKey()
+	if err != nil {
+		fmt.Printf("Error generating key: %v\n", err)
+		os.Exit(1)
+	}
+
+	original := "Sensitive data requiring protection"
+	fmt.Printf("Original: %s\n", original)
+
+	encrypted, err := encryptString(original, key)
+	if err != nil {
+		fmt.Printf("Encryption error: %v\n", err)
+		os.Exit(1)
+	}
+	fmt.Printf("Encrypted: %s\n", encrypted)
+
+	decrypted, err := decryptString(encrypted, key)
+	if err != nil {
+		fmt.Printf("Decryption error: %v\n", err)
+		os.Exit(1)
+	}
+	fmt.Printf("Decrypted: %s\n", decrypted)
 }
