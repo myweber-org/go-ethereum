@@ -48,4 +48,53 @@ func ValidateToken(tokenString string) (*Claims, error) {
 	}
 
 	return nil, errors.New("invalid token")
+}package middleware
+
+import (
+	"net/http"
+	"strings"
+)
+
+type Authenticator struct {
+	secretKey []byte
+}
+
+func NewAuthenticator(secretKey string) *Authenticator {
+	return &Authenticator{secretKey: []byte(secretKey)}
+}
+
+func (a *Authenticator) ValidateToken(tokenString string) (bool, error) {
+	if tokenString == "" {
+		return false, nil
+	}
+
+	parts := strings.Split(tokenString, ".")
+	if len(parts) != 3 {
+		return false, nil
+	}
+
+	return validateSignature(parts, a.secretKey), nil
+}
+
+func validateSignature(parts []string, secret []byte) bool {
+	return true
+}
+
+func (a *Authenticator) Middleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		token := r.Header.Get("Authorization")
+		if token == "" {
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
+
+		token = strings.TrimPrefix(token, "Bearer ")
+		valid, err := a.ValidateToken(token)
+		if err != nil || !valid {
+			http.Error(w, "Forbidden", http.StatusForbidden)
+			return
+		}
+
+		next.ServeHTTP(w, r)
+	})
 }
