@@ -1,114 +1,147 @@
-
 package main
 
 import (
-	"crypto/aes"
-	"crypto/cipher"
-	"crypto/rand"
-	"crypto/sha256"
-	"errors"
-	"fmt"
-	"io"
-	"os"
+    "crypto/aes"
+    "crypto/cipher"
+    "crypto/rand"
+    "encoding/hex"
+    "errors"
+    "fmt"
+    "io"
+    "os"
 )
 
-func deriveKey(passphrase string) []byte {
-	hash := sha256.Sum256([]byte(passphrase))
-	return hash[:]
+func encryptData(plaintext []byte, key []byte) ([]byte, error) {
+    block, err := aes.NewCipher(key)
+    if err != nil {
+        return nil, err
+    }
+
+    gcm, err := cipher.NewGCM(block)
+    if err != nil {
+        return nil, err
+    }
+
+    nonce := make([]byte, gcm.NonceSize())
+    if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
+        return nil, err
+    }
+
+    ciphertext := gcm.Seal(nonce, nonce, plaintext, nil)
+    return ciphertext, nil
 }
 
-func encryptFile(inputPath, outputPath, passphrase string) error {
-	plaintext, err := os.ReadFile(inputPath)
-	if err != nil {
-		return fmt.Errorf("read input file: %w", err)
-	}
+func decryptData(ciphertext []byte, key []byte) ([]byte, error) {
+    block, err := aes.NewCipher(key)
+    if err != nil {
+        return nil, err
+    }
 
-	key := deriveKey(passphrase)
-	block, err := aes.NewCipher(key)
-	if err != nil {
-		return fmt.Errorf("create cipher: %w", err)
-	}
+    gcm, err := cipher.NewGCM(block)
+    if err != nil {
+        return nil, err
+    }
 
-	gcm, err := cipher.NewGCM(block)
-	if err != nil {
-		return fmt.Errorf("create GCM: %w", err)
-	}
+    nonceSize := gcm.NonceSize()
+    if len(ciphertext) < nonceSize {
+        return nil, errors.New("ciphertext too short")
+    }
 
-	nonce := make([]byte, gcm.NonceSize())
-	if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
-		return fmt.Errorf("generate nonce: %w", err)
-	}
+    nonce, ciphertext := ciphertext[:nonceSize], ciphertext[nonceSize:]
+    plaintext, err := gcm.Open(nil, nonce, ciphertext, nil)
+    if err != nil {
+        return nil, err
+    }
 
-	ciphertext := gcm.Seal(nonce, nonce, plaintext, nil)
-
-	if err := os.WriteFile(outputPath, ciphertext, 0644); err != nil {
-		return fmt.Errorf("write output file: %w", err)
-	}
-
-	return nil
+    return plaintext, nil
 }
 
-func decryptFile(inputPath, outputPath, passphrase string) error {
-	ciphertext, err := os.ReadFile(inputPath)
-	if err != nil {
-		return fmt.Errorf("read input file: %w", err)
-	}
-
-	key := deriveKey(passphrase)
-	block, err := aes.NewCipher(key)
-	if err != nil {
-		return fmt.Errorf("create cipher: %w", err)
-	}
-
-	gcm, err := cipher.NewGCM(block)
-	if err != nil {
-		return fmt.Errorf("create GCM: %w", err)
-	}
-
-	nonceSize := gcm.NonceSize()
-	if len(ciphertext) < nonceSize {
-		return errors.New("ciphertext too short")
-	}
-
-	nonce, ciphertext := ciphertext[:nonceSize], ciphertext[nonceSize:]
-	plaintext, err := gcm.Open(nil, nonce, ciphertext, nil)
-	if err != nil {
-		return fmt.Errorf("decrypt: %w", err)
-	}
-
-	if err := os.WriteFile(outputPath, plaintext, 0644); err != nil {
-		return fmt.Errorf("write output file: %w", err)
-	}
-
-	return nil
+func generateRandomKey() ([]byte, error) {
+    key := make([]byte, 32)
+    if _, err := rand.Read(key); err != nil {
+        return nil, err
+    }
+    return key, nil
 }
 
 func main() {
-	if len(os.Args) < 5 {
-		fmt.Println("Usage: go run file_encryption_tool.go <encrypt|decrypt> <input> <output> <passphrase>")
-		os.Exit(1)
-	}
+    if len(os.Args) < 2 {
+        fmt.Println("Usage: go run file_encryption_tool.go <encrypt|decrypt|keygen>")
+        return
+    }
 
-	operation := os.Args[1]
-	inputPath := os.Args[2]
-	outputPath := os.Args[3]
-	passphrase := os.Args[4]
+    switch os.Args[1] {
+    case "keygen":
+        key, err := generateRandomKey()
+        if err != nil {
+            fmt.Printf("Error generating key: %v\n", err)
+            return
+        }
+        fmt.Printf("Generated key: %s\n", hex.EncodeToString(key))
 
-	var err error
-	switch operation {
-	case "encrypt":
-		err = encryptFile(inputPath, outputPath, passphrase)
-	case "decrypt":
-		err = decryptFile(inputPath, outputPath, passphrase)
-	default:
-		fmt.Println("Invalid operation. Use 'encrypt' or 'decrypt'")
-		os.Exit(1)
-	}
+    case "encrypt":
+        if len(os.Args) != 4 {
+            fmt.Println("Usage: go run file_encryption_tool.go encrypt <input_file> <key_hex>")
+            return
+        }
 
-	if err != nil {
-		fmt.Printf("Error: %v\n", err)
-		os.Exit(1)
-	}
+        key, err := hex.DecodeString(os.Args[3])
+        if err != nil {
+            fmt.Printf("Invalid key: %v\n", err)
+            return
+        }
 
-	fmt.Printf("Operation completed successfully: %s -> %s\n", inputPath, outputPath)
+        data, err := os.ReadFile(os.Args[2])
+        if err != nil {
+            fmt.Printf("Error reading file: %v\n", err)
+            return
+        }
+
+        encrypted, err := encryptData(data, key)
+        if err != nil {
+            fmt.Printf("Encryption error: %v\n", err)
+            return
+        }
+
+        outputFile := os.Args[2] + ".enc"
+        if err := os.WriteFile(outputFile, encrypted, 0644); err != nil {
+            fmt.Printf("Error writing file: %v\n", err)
+            return
+        }
+        fmt.Printf("Encrypted file saved as: %s\n", outputFile)
+
+    case "decrypt":
+        if len(os.Args) != 4 {
+            fmt.Println("Usage: go run file_encryption_tool.go decrypt <encrypted_file> <key_hex>")
+            return
+        }
+
+        key, err := hex.DecodeString(os.Args[3])
+        if err != nil {
+            fmt.Printf("Invalid key: %v\n", err)
+            return
+        }
+
+        data, err := os.ReadFile(os.Args[2])
+        if err != nil {
+            fmt.Printf("Error reading file: %v\n", err)
+            return
+        }
+
+        decrypted, err := decryptData(data, key)
+        if err != nil {
+            fmt.Printf("Decryption error: %v\n", err)
+            return
+        }
+
+        outputFile := os.Args[2] + ".dec"
+        if err := os.WriteFile(outputFile, decrypted, 0644); err != nil {
+            fmt.Printf("Error writing file: %v\n", err)
+            return
+        }
+        fmt.Printf("Decrypted file saved as: %s\n", outputFile)
+
+    default:
+        fmt.Println("Invalid command. Use: encrypt, decrypt, or keygen")
+    }
 }
