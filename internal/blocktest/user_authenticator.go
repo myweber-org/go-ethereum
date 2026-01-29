@@ -1,86 +1,48 @@
-package main
+package middleware
 
 import (
-    "fmt"
-    "time"
-
+    "net/http"
+    "strings"
     "github.com/golang-jwt/jwt/v5"
 )
 
-type User struct {
-    ID       int
-    Username string
-    Email    string
-}
-
 type Claims struct {
-    UserID   int    `json:"user_id"`
-    Username string `json:"username"`
-    Email    string `json:"email"`
+    UserID string `json:"user_id"`
+    Role   string `json:"role"`
     jwt.RegisteredClaims
 }
 
-var jwtSecret = []byte("your-secret-key-change-in-production")
+func AuthMiddleware(secretKey string) func(http.Handler) http.Handler {
+    return func(next http.Handler) http.Handler {
+        return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+            authHeader := r.Header.Get("Authorization")
+            if authHeader == "" {
+                http.Error(w, "Authorization header required", http.StatusUnauthorized)
+                return
+            }
 
-func GenerateToken(user User) (string, error) {
-    expirationTime := time.Now().Add(24 * time.Hour)
+            parts := strings.Split(authHeader, " ")
+            if len(parts) != 2 || parts[0] != "Bearer" {
+                http.Error(w, "Invalid authorization format", http.StatusUnauthorized)
+                return
+            }
 
-    claims := &Claims{
-        UserID:   user.ID,
-        Username: user.Username,
-        Email:    user.Email,
-        RegisteredClaims: jwt.RegisteredClaims{
-            ExpiresAt: jwt.NewNumericDate(expirationTime),
-            IssuedAt:  jwt.NewNumericDate(time.Now()),
-            Issuer:    "auth-service",
-        },
+            tokenStr := parts[1]
+            claims := &Claims{}
+
+            token, err := jwt.ParseWithClaims(tokenStr, claims, func(token *jwt.Token) (interface{}, error) {
+                return []byte(secretKey), nil
+            })
+
+            if err != nil || !token.Valid {
+                http.Error(w, "Invalid token", http.StatusUnauthorized)
+                return
+            }
+
+            r.Header.Set("X-User-ID", claims.UserID)
+            r.Header.Set("X-User-Role", claims.Role)
+
+            next.ServeHTTP(w, r)
+        })
     }
-
-    token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-    return token.SignedString(jwtSecret)
-}
-
-func ValidateToken(tokenString string) (*Claims, error) {
-    claims := &Claims{}
-
-    token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
-        return jwtSecret, nil
-    })
-
-    if err != nil {
-        return nil, err
-    }
-
-    if !token.Valid {
-        return nil, fmt.Errorf("invalid token")
-    }
-
-    return claims, nil
-}
-
-func main() {
-    testUser := User{
-        ID:       1,
-        Username: "john_doe",
-        Email:    "john@example.com",
-    }
-
-    token, err := GenerateToken(testUser)
-    if err != nil {
-        fmt.Printf("Error generating token: %v\n", err)
-        return
-    }
-
-    fmt.Printf("Generated Token: %s\n\n", token)
-
-    claims, err := ValidateToken(token)
-    if err != nil {
-        fmt.Printf("Error validating token: %v\n", err)
-        return
-    }
-
-    fmt.Printf("Token validated successfully!\n")
-    fmt.Printf("User ID: %d\n", claims.UserID)
-    fmt.Printf("Username: %s\n", claims.Username)
-    fmt.Printf("Email: %s\n", claims.Email)
 }
