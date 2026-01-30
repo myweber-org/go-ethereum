@@ -2,54 +2,115 @@
 package main
 
 import (
-	"errors"
-	"regexp"
+	"encoding/csv"
+	"fmt"
+	"io"
+	"os"
 	"strings"
 )
 
-var emailRegex = regexp.MustCompile(`^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$`)
+type DataRecord struct {
+	ID      string
+	Name    string
+	Email   string
+	Active  string
+}
 
-func ValidateEmail(email string) error {
-	if !emailRegex.MatchString(email) {
-		return errors.New("invalid email format")
+func ProcessCSVFile(filePath string) ([]DataRecord, error) {
+	file, err := os.Open(filePath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open file: %w", err)
 	}
-	return nil
-}
+	defer file.Close()
 
-func SanitizeInput(input string) string {
-	input = strings.TrimSpace(input)
-	input = strings.ReplaceAll(input, "<", "&lt;")
-	input = strings.ReplaceAll(input, ">", "&gt;")
-	return input
-}
+	reader := csv.NewReader(file)
+	reader.TrimLeadingSpace = true
 
-func TransformUsername(username string) string {
-	return strings.ToLower(strings.TrimSpace(username))
-}
+	var records []DataRecord
+	lineNumber := 0
 
-func ValidatePassword(password string) error {
-	if len(password) < 8 {
-		return errors.New("password must be at least 8 characters")
+	for {
+		lineNumber++
+		row, err := reader.Read()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return nil, fmt.Errorf("csv read error at line %d: %w", lineNumber, err)
+		}
+
+		if lineNumber == 1 {
+			continue
+		}
+
+		if len(row) < 4 {
+			return nil, fmt.Errorf("invalid column count at line %d", lineNumber)
+		}
+
+		record := DataRecord{
+			ID:     strings.TrimSpace(row[0]),
+			Name:   strings.TrimSpace(row[1]),
+			Email:  strings.TrimSpace(row[2]),
+			Active: strings.TrimSpace(row[3]),
+		}
+
+		if record.ID == "" || record.Name == "" {
+			return nil, fmt.Errorf("missing required fields at line %d", lineNumber)
+		}
+
+		records = append(records, record)
 	}
-	
-	hasUpper := false
-	hasLower := false
-	hasDigit := false
-	
-	for _, char := range password {
-		switch {
-		case 'A' <= char && char <= 'Z':
-			hasUpper = true
-		case 'a' <= char && char <= 'z':
-			hasLower = true
-		case '0' <= char && char <= '9':
-			hasDigit = true
+
+	return records, nil
+}
+
+func ValidateEmail(email string) bool {
+	if !strings.Contains(email, "@") {
+		return false
+	}
+	parts := strings.Split(email, "@")
+	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
+		return false
+	}
+	return strings.Contains(parts[1], ".")
+}
+
+func FilterActiveUsers(records []DataRecord) []DataRecord {
+	var activeUsers []DataRecord
+	for _, record := range records {
+		if strings.ToLower(record.Active) == "true" {
+			activeUsers = append(activeUsers, record)
 		}
 	}
+	return activeUsers
+}
+
+func GenerateReport(records []DataRecord) {
+	fmt.Printf("Total records processed: %d\n", len(records))
 	
-	if !hasUpper || !hasLower || !hasDigit {
-		return errors.New("password must contain uppercase, lowercase and digit")
+	activeUsers := FilterActiveUsers(records)
+	fmt.Printf("Active users: %d\n", len(activeUsers))
+
+	emailValidCount := 0
+	for _, record := range records {
+		if ValidateEmail(record.Email) {
+			emailValidCount++
+		}
 	}
-	
-	return nil
+	fmt.Printf("Valid email addresses: %d\n", emailValidCount)
+}
+
+func main() {
+	if len(os.Args) < 2 {
+		fmt.Println("Usage: data_processor <csv_file_path>")
+		os.Exit(1)
+	}
+
+	records, err := ProcessCSVFile(os.Args[1])
+	if err != nil {
+		fmt.Printf("Error processing file: %v\n", err)
+		os.Exit(1)
+	}
+
+	GenerateReport(records)
 }
