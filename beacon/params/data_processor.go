@@ -79,4 +79,49 @@ func main() {
 			fmt.Printf("Record %d processed: %s, %.2f\n", records[i].ID, records[i].Name, records[i].Value)
 		}
 	}
+}package main
+
+import (
+	"encoding/json"
+	"fmt"
+	"log"
+)
+
+// ValidateJSON checks if the provided byte slice contains valid JSON.
+func ValidateJSON(data []byte) bool {
+	var js interface{}
+	return json.Unmarshal(data, &js) == nil
+}
+
+// ParseUserData attempts to parse JSON into a predefined User struct.
+func ParseUserData(jsonData []byte) (*User, error) {
+	var user User
+	err := json.Unmarshal(jsonData, &user)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse user data: %w", err)
+	}
+	return &user, nil
+}
+
+// User represents a simple user structure.
+type User struct {
+	ID    int    `json:"id"`
+	Name  string `json:"name"`
+	Email string `json:"email"`
+}
+
+func main() {
+	// Example usage
+	sampleJSON := `{"id": 1, "name": "Alice", "email": "alice@example.com"}`
+	
+	if ValidateJSON([]byte(sampleJSON)) {
+		fmt.Println("JSON is valid.")
+		user, err := ParseUserData([]byte(sampleJSON))
+		if err != nil {
+			log.Fatal(err)
+		}
+		fmt.Printf("Parsed User: %+v\n", user)
+	} else {
+		fmt.Println("Invalid JSON.")
+	}
 }
