@@ -1,15 +1,16 @@
-
 package middleware
 
 import (
-	"context"
 	"net/http"
 	"strings"
+	"github.com/golang-jwt/jwt/v5"
 )
 
-type contextKey string
-
-const userIDKey contextKey = "userID"
+type Claims struct {
+	UserID string `json:"user_id"`
+	Role   string `json:"role"`
+	jwt.RegisteredClaims
+}
 
 func Authenticate(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -19,38 +20,24 @@ func Authenticate(next http.Handler) http.Handler {
 			return
 		}
 
-		parts := strings.Split(authHeader, " ")
-		if len(parts) != 2 || parts[0] != "Bearer" {
-			http.Error(w, "Invalid authorization format", http.StatusUnauthorized)
+		tokenString := strings.TrimPrefix(authHeader, "Bearer ")
+		if tokenString == authHeader {
+			http.Error(w, "Bearer token required", http.StatusUnauthorized)
 			return
 		}
 
-		token := parts[1]
-		userID, err := validateToken(token)
-		if err != nil {
+		claims := &Claims{}
+		token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
+			return []byte("your-secret-key"), nil
+		})
+
+		if err != nil || !token.Valid {
 			http.Error(w, "Invalid token", http.StatusUnauthorized)
 			return
 		}
 
-		ctx := context.WithValue(r.Context(), userIDKey, userID)
-		next.ServeHTTP(w, r.WithContext(ctx))
+		r.Header.Set("X-User-ID", claims.UserID)
+		r.Header.Set("X-User-Role", claims.Role)
+		next.ServeHTTP(w, r)
 	})
-}
-
-func validateToken(token string) (string, error) {
-	// Token validation logic would be implemented here
-	// For example, using jwt-go library to parse and verify
-	// This is a simplified placeholder implementation
-	if token == "" || len(token) < 10 {
-		return "", http.ErrAbortHandler
-	}
-	
-	// In real implementation, this would decode JWT and verify signature
-	// Returning a mock user ID for demonstration
-	return "user-12345", nil
-}
-
-func GetUserID(ctx context.Context) (string, bool) {
-	userID, ok := ctx.Value(userIDKey).(string)
-	return userID, ok
 }
