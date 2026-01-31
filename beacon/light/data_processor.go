@@ -1,65 +1,86 @@
-
-package main
-
-import "fmt"
-
-func calculateMovingAverage(data []float64, windowSize int) []float64 {
-    if len(data) == 0 || windowSize <= 0 || windowSize > len(data) {
-        return []float64{}
-    }
-
-    result := make([]float64, len(data)-windowSize+1)
-    var sum float64
-
-    for i := 0; i < windowSize; i++ {
-        sum += data[i]
-    }
-    result[0] = sum / float64(windowSize)
-
-    for i := windowSize; i < len(data); i++ {
-        sum = sum - data[i-windowSize] + data[i]
-        result[i-windowSize+1] = sum / float64(windowSize)
-    }
-
-    return result
-}
-
-func main() {
-    sampleData := []float64{1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0}
-    window := 3
-
-    movingAvg := calculateMovingAverage(sampleData, window)
-    fmt.Printf("Moving average (window=%d): %v\n", window, movingAvg)
-}
 package main
 
 import (
-    "regexp"
-    "strings"
+	"encoding/csv"
+	"errors"
+	"io"
+	"os"
+	"strconv"
 )
 
-type DataProcessor struct {
-    stripPattern *regexp.Regexp
+type DataRecord struct {
+	ID    int
+	Name  string
+	Value float64
 }
 
-func NewDataProcessor() *DataProcessor {
-    return &DataProcessor{
-        stripPattern: regexp.MustCompile(`[^a-zA-Z0-9\s\-_]`),
-    }
+func ParseCSVFile(filePath string) ([]DataRecord, error) {
+	file, err := os.Open(filePath)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+
+	reader := csv.NewReader(file)
+	records := make([]DataRecord, 0)
+
+	// Skip header
+	_, err = reader.Read()
+	if err != nil {
+		return nil, err
+	}
+
+	for {
+		row, err := reader.Read()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
+
+		if len(row) < 3 {
+			return nil, errors.New("invalid CSV format")
+		}
+
+		id, err := strconv.Atoi(row[0])
+		if err != nil {
+			return nil, err
+		}
+
+		name := row[1]
+
+		value, err := strconv.ParseFloat(row[2], 64)
+		if err != nil {
+			return nil, err
+		}
+
+		records = append(records, DataRecord{
+			ID:    id,
+			Name:  name,
+			Value: value,
+		})
+	}
+
+	return records, nil
 }
 
-func (dp *DataProcessor) CleanInput(input string) string {
-    cleaned := dp.stripPattern.ReplaceAllString(input, "")
-    return strings.TrimSpace(cleaned)
-}
-
-func (dp *DataProcessor) ValidateLength(input string, min, max int) bool {
-    length := len(input)
-    return length >= min && length <= max
-}
-
-func (dp *DataProcessor) Process(input string, minLen, maxLen int) (string, bool) {
-    cleaned := dp.CleanInput(input)
-    isValid := dp.ValidateLength(cleaned, minLen, maxLen)
-    return cleaned, isValid
+func ValidateRecords(records []DataRecord) error {
+	seenIDs := make(map[int]bool)
+	for _, record := range records {
+		if record.ID <= 0 {
+			return errors.New("invalid ID value")
+		}
+		if record.Name == "" {
+			return errors.New("name cannot be empty")
+		}
+		if record.Value < 0 {
+			return errors.New("value cannot be negative")
+		}
+		if seenIDs[record.ID] {
+			return errors.New("duplicate ID found")
+		}
+		seenIDs[record.ID] = true
+	}
+	return nil
 }
