@@ -1,3 +1,4 @@
+
 package main
 
 import (
@@ -5,6 +6,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"sync"
 	"time"
 )
 
@@ -14,119 +16,113 @@ const (
 	logDir      = "./logs"
 )
 
-type LogRotator struct {
+type RotatingWriter struct {
 	currentFile *os.File
 	currentSize int64
+	mu          sync.Mutex
 	baseName    string
 }
 
-func NewLogRotator(name string) (*LogRotator, error) {
+func NewRotatingWriter(filename string) (*RotatingWriter, error) {
 	if err := os.MkdirAll(logDir, 0755); err != nil {
 		return nil, err
 	}
 
-	basePath := filepath.Join(logDir, name)
-	rotator := &LogRotator{baseName: basePath}
-
-	if err := rotator.openCurrentFile(); err != nil {
-		return nil, err
-	}
-
-	return rotator, nil
-}
-
-func (lr *LogRotator) openCurrentFile() error {
-	path := lr.baseName + ".log"
-	file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0644)
+	basePath := filepath.Join(logDir, filename)
+	file, err := os.OpenFile(basePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	info, err := file.Stat()
 	if err != nil {
 		file.Close()
-		return err
+		return nil, err
 	}
 
-	lr.currentFile = file
-	lr.currentSize = info.Size()
-	return nil
+	return &RotatingWriter{
+		currentFile: file,
+		currentSize: info.Size(),
+		baseName:    filename,
+	}, nil
 }
 
-func (lr *LogRotator) Write(p []byte) (int, error) {
-	if lr.currentSize+int64(len(p)) > maxFileSize {
-		if err := lr.rotate(); err != nil {
+func (w *RotatingWriter) Write(p []byte) (int, error) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+
+	if w.currentSize+int64(len(p)) > maxFileSize {
+		if err := w.rotate(); err != nil {
 			return 0, err
 		}
 	}
 
-	n, err := lr.currentFile.Write(p)
+	n, err := w.currentFile.Write(p)
 	if err == nil {
-		lr.currentSize += int64(n)
+		w.currentSize += int64(n)
 	}
 	return n, err
 }
 
-func (lr *LogRotator) rotate() error {
-	if lr.currentFile != nil {
-		lr.currentFile.Close()
+func (w *RotatingWriter) rotate() error {
+	if w.currentFile != nil {
+		w.currentFile.Close()
 	}
 
-	timestamp := time.Now().Format("20060102-150405")
-	oldPath := lr.baseName + ".log"
-	newPath := fmt.Sprintf("%s-%s.log", lr.baseName, timestamp)
+	timestamp := time.Now().Format("20060102_150405")
+	oldPath := filepath.Join(logDir, w.baseName)
+	newPath := filepath.Join(logDir, fmt.Sprintf("%s.%s", w.baseName, timestamp))
 
 	if err := os.Rename(oldPath, newPath); err != nil {
 		return err
 	}
 
-	if err := lr.cleanupOldLogs(); err != nil {
-		fmt.Printf("Cleanup error: %v\n", err)
-	}
-
-	return lr.openCurrentFile()
-}
-
-func (lr *LogRotator) cleanupOldLogs() error {
-	pattern := lr.baseName + "-*.log"
-	matches, err := filepath.Glob(pattern)
+	file, err := os.OpenFile(oldPath, os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
 		return err
 	}
 
-	if len(matches) <= maxBackups {
-		return nil
-	}
+	w.currentFile = file
+	w.currentSize = 0
 
-	toDelete := matches[:len(matches)-maxBackups]
-	for _, file := range toDelete {
-		if err := os.Remove(file); err != nil {
-			return err
-		}
-	}
-
+	go w.cleanupOldLogs()
 	return nil
 }
 
-func (lr *LogRotator) Close() error {
-	if lr.currentFile != nil {
-		return lr.currentFile.Close()
+func (w *RotatingWriter) cleanupOldLogs() {
+	pattern := filepath.Join(logDir, fmt.Sprintf("%s.*", w.baseName))
+	matches, err := filepath.Glob(pattern)
+	if err != nil {
+		return
 	}
-	return nil
+
+	if len(matches) > maxBackups {
+		toDelete := matches[:len(matches)-maxBackups]
+		for _, path := range toDelete {
+			os.Remove(path)
+		}
+	}
+}
+
+func (w *RotatingWriter) Close() error {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.currentFile.Close()
 }
 
 func main() {
-	rotator, err := NewLogRotator("app")
+	writer, err := NewRotatingWriter("app.log")
 	if err != nil {
-		panic(err)
+		fmt.Printf("Failed to create writer: %v\n", err)
+		return
 	}
-	defer rotator.Close()
-
-	writer := io.MultiWriter(os.Stdout, rotator)
+	defer writer.Close()
 
 	for i := 0; i < 100; i++ {
-		message := fmt.Sprintf("Log entry %d: %s\n", i, time.Now().Format(time.RFC3339))
+		message := fmt.Sprintf("[%s] Log entry number %d\n", time.Now().Format(time.RFC3339), i)
 		writer.Write([]byte(message))
 		time.Sleep(100 * time.Millisecond)
 	}
+
+	fmt.Println("Log rotation example completed")
 }
