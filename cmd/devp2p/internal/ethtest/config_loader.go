@@ -1,60 +1,53 @@
 package config
 
 import (
-    "fmt"
     "os"
-    "path/filepath"
-
-    "gopkg.in/yaml.v3"
+    "strconv"
 )
 
-type DatabaseConfig struct {
-    Host     string `yaml:"host" env:"DB_HOST"`
-    Port     int    `yaml:"port" env:"DB_PORT"`
-    Username string `yaml:"username" env:"DB_USER"`
-    Password string `yaml:"password" env:"DB_PASS"`
-    Name     string `yaml:"name" env:"DB_NAME"`
+type Config struct {
+    ServerPort int
+    DBHost     string
+    DBPort     int
+    DebugMode  bool
 }
 
-type ServerConfig struct {
-    Port         int    `yaml:"port" env:"SERVER_PORT"`
-    ReadTimeout  int    `yaml:"read_timeout" env:"READ_TIMEOUT"`
-    WriteTimeout int    `yaml:"write_timeout" env:"WRITE_TIMEOUT"`
-    DebugMode    bool   `yaml:"debug_mode" env:"DEBUG_MODE"`
-    LogLevel     string `yaml:"log_level" env:"LOG_LEVEL"`
+func LoadConfig() (*Config, error) {
+    cfg := &Config{
+        ServerPort: getEnvAsInt("SERVER_PORT", 8080),
+        DBHost:     getEnv("DB_HOST", "localhost"),
+        DBPort:     getEnvAsInt("DB_PORT", 5432),
+        DebugMode:  getEnvAsBool("DEBUG_MODE", false),
+    }
+    return cfg, nil
 }
 
-type AppConfig struct {
-    Database DatabaseConfig `yaml:"database"`
-    Server   ServerConfig   `yaml:"server"`
-    Version  string         `yaml:"version"`
+func getEnv(key, defaultValue string) string {
+    if value, exists := os.LookupEnv(key); exists {
+        return value
+    }
+    return defaultValue
 }
 
-func LoadConfig(configPath string) (*AppConfig, error) {
-    var config AppConfig
+func getEnvAsInt(key string, defaultValue int) int {
+    strValue := getEnv(key, "")
+    if strValue == "" {
+        return defaultValue
+    }
+    if intValue, err := strconv.Atoi(strValue); err == nil {
+        return intValue
+    }
+    return defaultValue
+}
 
-    absPath, err := filepath.Abs(configPath)
+func getEnvAsBool(key string, defaultValue bool) bool {
+    strValue := getEnv(key, "")
+    if strValue == "" {
+        return defaultValue
+    }
+    boolValue, err := strconv.ParseBool(strValue)
     if err != nil {
-        return nil, fmt.Errorf("invalid config path: %w", err)
+        return defaultValue
     }
-
-    data, err := os.ReadFile(absPath)
-    if err != nil {
-        return nil, fmt.Errorf("failed to read config file: %w", err)
-    }
-
-    if err := yaml.Unmarshal(data, &config); err != nil {
-        return nil, fmt.Errorf("failed to parse YAML: %w", err)
-    }
-
-    overrideFromEnv(&config.Database)
-    overrideFromEnv(&config.Server)
-
-    return &config, nil
-}
-
-func overrideFromEnv(config interface{}) {
-    // Implementation would use reflection to check struct tags
-    // and override values from environment variables
-    // Simplified placeholder for demonstration
+    return boolValue
 }
