@@ -60,4 +60,33 @@ func main() {
 	}
 	
 	fmt.Printf("Unique items: %d\n", cleaner.GetUniqueCount())
+}package utils
+
+import (
+	"regexp"
+	"strings"
+	"unicode"
+)
+
+func SanitizeString(input string) string {
+	// Trim whitespace
+	trimmed := strings.TrimSpace(input)
+	
+	// Remove extra internal whitespace
+	space := regexp.MustCompile(`\s+`)
+	normalized := space.ReplaceAllString(trimmed, " ")
+	
+	// Remove non-printable characters
+	var result strings.Builder
+	for _, r := range normalized {
+		if unicode.IsPrint(r) {
+			result.WriteRune(r)
+		}
+	}
+	
+	return result.String()
+}
+
+func NormalizeWhitespace(input string) string {
+	return strings.Join(strings.Fields(input), " ")
 }
