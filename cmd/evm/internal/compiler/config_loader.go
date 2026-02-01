@@ -1,53 +1,91 @@
 package config
 
 import (
-	"io/ioutil"
-	"log"
-
-	"gopkg.in/yaml.v2"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"os"
+	"reflect"
+	"strconv"
+	"strings"
 )
 
-type AppConfig struct {
-	Server struct {
-		Port    int    `yaml:"port"`
-		Host    string `yaml:"host"`
-		Timeout int    `yaml:"timeout"`
-	} `yaml:"server"`
-	Database struct {
-		Host     string `yaml:"host"`
-		Port     int    `yaml:"port"`
-		Username string `yaml:"username"`
-		Password string `yaml:"password"`
-		Name     string `yaml:"name"`
-	} `yaml:"database"`
-	Logging struct {
-		Level  string `yaml:"level"`
-		Output string `yaml:"output"`
-	} `yaml:"logging"`
+type Config struct {
+	ServerPort int    `env:"SERVER_PORT" default:"8080"`
+	DBHost     string `env:"DB_HOST" default:"localhost"`
+	DBPort     int    `env:"DB_PORT" default:"5432"`
+	DBName     string `env:"DB_NAME" default:"appdb"`
+	DebugMode  bool   `env:"DEBUG_MODE" default:"false"`
 }
 
-func LoadConfig(filePath string) (*AppConfig, error) {
-	data, err := ioutil.ReadFile(filePath)
-	if err != nil {
-		return nil, err
+func LoadConfig() (*Config, error) {
+	cfg := &Config{}
+	v := reflect.ValueOf(cfg).Elem()
+	t := v.Type()
+
+	for i := 0; i < v.NumField(); i++ {
+		field := v.Field(i)
+		structField := t.Field(i)
+
+		envKey := structField.Tag.Get("env")
+		defaultValue := structField.Tag.Get("default")
+
+		envValue := os.Getenv(envKey)
+		if envValue == "" {
+			envValue = defaultValue
+		}
+
+		if envValue == "" {
+			return nil, fmt.Errorf("missing value for %s", envKey)
+		}
+
+		if err := setFieldValue(field, envValue); err != nil {
+			return nil, fmt.Errorf("invalid value for %s: %w", envKey, err)
+		}
 	}
 
-	var config AppConfig
-	err = yaml.Unmarshal(data, &config)
-	if err != nil {
-		return nil, err
-	}
-
-	log.Printf("Configuration loaded from %s", filePath)
-	return &config, nil
+	return cfg, nil
 }
 
-func ValidateConfig(config *AppConfig) bool {
-	if config.Server.Port <= 0 || config.Server.Port > 65535 {
-		return false
+func setFieldValue(field reflect.Value, value string) error {
+	switch field.Kind() {
+	case reflect.String:
+		field.SetString(value)
+	case reflect.Int:
+		intVal, err := strconv.Atoi(value)
+		if err != nil {
+			return err
+		}
+		field.SetInt(int64(intVal))
+	case reflect.Bool:
+		boolVal, err := strconv.ParseBool(value)
+		if err != nil {
+			return err
+		}
+		field.SetBool(boolVal)
+	default:
+		return errors.New("unsupported field type")
 	}
-	if config.Database.Host == "" || config.Database.Name == "" {
-		return false
+	return nil
+}
+
+func (c *Config) Validate() error {
+	if c.ServerPort < 1 || c.ServerPort > 65535 {
+		return errors.New("server port must be between 1 and 65535")
 	}
-	return true
+	if c.DBPort < 1 || c.DBPort > 65535 {
+		return errors.New("database port must be between 1 and 65535")
+	}
+	if strings.TrimSpace(c.DBHost) == "" {
+		return errors.New("database host cannot be empty")
+	}
+	if strings.TrimSpace(c.DBName) == "" {
+		return errors.New("database name cannot be empty")
+	}
+	return nil
+}
+
+func (c *Config) String() string {
+	data, _ := json.MarshalIndent(c, "", "  ")
+	return string(data)
 }
