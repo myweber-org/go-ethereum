@@ -1,73 +1,139 @@
 package main
 
 import (
+	"encoding/csv"
 	"fmt"
-	"sync"
-	"time"
+	"io"
+	"os"
+	"strconv"
+	"strings"
 )
 
-type Task struct {
-	ID   int
-	Data string
+type Record struct {
+	ID      int
+	Name    string
+	Value   float64
+	Active  bool
 }
 
-type Result struct {
-	TaskID int
-	Output string
-	Err    error
+func parseCSV(filename string) ([]Record, error) {
+	file, err := os.Open(filename)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+
+	reader := csv.NewReader(file)
+	reader.TrimLeadingSpace = true
+
+	var records []Record
+	lineNum := 0
+
+	for {
+		lineNum++
+		row, err := reader.Read()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return nil, fmt.Errorf("line %d: %v", lineNum, err)
+		}
+
+		if len(row) != 4 {
+			return nil, fmt.Errorf("line %d: expected 4 columns, got %d", lineNum, len(row))
+		}
+
+		id, err := strconv.Atoi(strings.TrimSpace(row[0]))
+		if err != nil {
+			return nil, fmt.Errorf("line %d: invalid ID: %v", lineNum, err)
+		}
+
+		name := strings.TrimSpace(row[1])
+		if name == "" {
+			return nil, fmt.Errorf("line %d: name cannot be empty", lineNum)
+		}
+
+		value, err := strconv.ParseFloat(strings.TrimSpace(row[2]), 64)
+		if err != nil {
+			return nil, fmt.Errorf("line %d: invalid value: %v", lineNum, err)
+		}
+
+		active, err := strconv.ParseBool(strings.TrimSpace(row[3]))
+		if err != nil {
+			return nil, fmt.Errorf("line %d: invalid active flag: %v", lineNum, err)
+		}
+
+		records = append(records, Record{
+			ID:     id,
+			Name:   name,
+			Value:  value,
+			Active: active,
+		})
+	}
+
+	return records, nil
 }
 
-func worker(id int, tasks <-chan Task, results chan<- Result, wg *sync.WaitGroup) {
-	defer wg.Done()
-	for task := range tasks {
-		fmt.Printf("Worker %d processing task %d\n", id, task.ID)
-		time.Sleep(100 * time.Millisecond)
-		results <- Result{
-			TaskID: task.ID,
-			Output: fmt.Sprintf("Processed: %s", task.Data),
+func calculateStats(records []Record) (float64, float64, int) {
+	if len(records) == 0 {
+		return 0, 0, 0
+	}
+
+	var sum float64
+	var activeCount int
+	var minVal float64 = records[0].Value
+
+	for _, r := range records {
+		sum += r.Value
+		if r.Value < minVal {
+			minVal = r.Value
+		}
+		if r.Active {
+			activeCount++
 		}
 	}
+
+	average := sum / float64(len(records))
+	return average, minVal, activeCount
 }
 
-func processTasks(tasks []Task, numWorkers int) []Result {
-	taskChan := make(chan Task, len(tasks))
-	resultChan := make(chan Result, len(tasks))
-	var wg sync.WaitGroup
-
-	for i := 0; i < numWorkers; i++ {
-		wg.Add(1)
-		go worker(i, taskChan, resultChan, &wg)
+func filterRecords(records []Record, predicate func(Record) bool) []Record {
+	var filtered []Record
+	for _, r := range records {
+		if predicate(r) {
+			filtered = append(filtered, r)
+		}
 	}
-
-	for _, task := range tasks {
-		taskChan <- task
-	}
-	close(taskChan)
-
-	go func() {
-		wg.Wait()
-		close(resultChan)
-	}()
-
-	var results []Result
-	for result := range resultChan {
-		results = append(results, result)
-	}
-	return results
+	return filtered
 }
 
 func main() {
-	tasks := []Task{
-		{ID: 1, Data: "alpha"},
-		{ID: 2, Data: "beta"},
-		{ID: 3, Data: "gamma"},
-		{ID: 4, Data: "delta"},
-		{ID: 5, Data: "epsilon"},
+	if len(os.Args) != 2 {
+		fmt.Println("Usage: data_processor <csv_file>")
+		os.Exit(1)
 	}
 
-	results := processTasks(tasks, 3)
-	fmt.Println("\nProcessing complete:")
-	for _, r := range results {
-		fmt.Printf("Task %d: %s\n", r.TaskID, r.Output)
+	records, err := parseCSV(os.Args[1])
+	if err != nil {
+		fmt.Printf("Error parsing CSV: %v\n", err)
+		os.Exit(1)
+	}
+
+	fmt.Printf("Successfully loaded %d records\n", len(records))
+
+	avg, min, active := calculateStats(records)
+	fmt.Printf("Average value: %.2f\n", avg)
+	fmt.Printf("Minimum value: %.2f\n", min)
+	fmt.Printf("Active records: %d\n", active)
+
+	activeRecords := filterRecords(records, func(r Record) bool {
+		return r.Active && r.Value > 50.0
+	})
+	fmt.Printf("Records with value > 50 and active: %d\n", len(activeRecords))
+
+	for i, r := range activeRecords {
+		if i < 3 {
+			fmt.Printf("  %d: %s (%.2f)\n", r.ID, r.Name, r.Value)
+		}
 	}
 }
