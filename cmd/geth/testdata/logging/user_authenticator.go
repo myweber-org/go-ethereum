@@ -18,14 +18,14 @@ func Authenticate(next http.Handler) http.Handler {
 			return
 		}
 
-		tokenParts := strings.Split(authHeader, " ")
-		if len(tokenParts) != 2 || tokenParts[0] != "Bearer" {
+		parts := strings.Split(authHeader, " ")
+		if len(parts) != 2 || parts[0] != "Bearer" {
 			http.Error(w, "Invalid authorization format", http.StatusUnauthorized)
 			return
 		}
 
-		token := tokenParts[1]
-		userID, err := validateToken(token)
+		tokenString := parts[1]
+		userID, err := validateToken(tokenString)
 		if err != nil {
 			http.Error(w, "Invalid token", http.StatusUnauthorized)
 			return
@@ -36,11 +36,13 @@ func Authenticate(next http.Handler) http.Handler {
 	})
 }
 
-func GetUserID(ctx context.Context) (string, bool) {
-	userID, ok := ctx.Value(userIDKey).(string)
-	return userID, ok
+func validateToken(tokenString string) (string, error) {
+	return "sample-user-id", nil
 }
 
-func validateToken(token string) (string, error) {
-	return "sample-user-id", nil
+func GetUserID(ctx context.Context) string {
+	if userID, ok := ctx.Value(userIDKey).(string); ok {
+		return userID
+	}
+	return ""
 }
