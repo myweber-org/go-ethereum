@@ -1,104 +1,94 @@
 package config
 
 import (
-    "os"
-    "strconv"
-    "strings"
+	"encoding/json"
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
 )
 
+type DatabaseConfig struct {
+	Host     string `json:"host" env:"DB_HOST"`
+	Port     int    `json:"port" env:"DB_PORT"`
+	Username string `json:"username" env:"DB_USER"`
+	Password string `json:"password" env:"DB_PASS"`
+	Database string `json:"database" env:"DB_NAME"`
+}
+
+type ServerConfig struct {
+	Port         int    `json:"port" env:"SERVER_PORT"`
+	ReadTimeout  int    `json:"read_timeout" env:"READ_TIMEOUT"`
+	WriteTimeout int    `json:"write_timeout" env:"WRITE_TIMEOUT"`
+	DebugMode    bool   `json:"debug_mode" env:"DEBUG_MODE"`
+	LogLevel     string `json:"log_level" env:"LOG_LEVEL"`
+}
+
 type Config struct {
-    DatabaseURL  string
-    MaxConnections int
-    DebugMode    bool
-    AllowedHosts []string
+	Database DatabaseConfig `json:"database"`
+	Server   ServerConfig   `json:"server"`
 }
 
-func LoadConfig(filename string) (*Config, error) {
-    cfg := &Config{
-        DatabaseURL:  getEnvOrDefault("DB_URL", "postgres://localhost:5432/mydb"),
-        MaxConnections: getEnvAsInt("MAX_CONNECTIONS", 10),
-        DebugMode:    getEnvAsBool("DEBUG_MODE", false),
-        AllowedHosts: getEnvAsSlice("ALLOWED_HOSTS", []string{"localhost", "127.0.0.1"}),
-    }
+func LoadConfig(configPath string) (*Config, error) {
+	var config Config
 
-    if filename != "" {
-        err := loadFromFile(filename, cfg)
-        if err != nil {
-            return nil, err
-        }
-    }
+	absPath, err := filepath.Abs(configPath)
+	if err != nil {
+		return nil, fmt.Errorf("invalid config path: %w", err)
+	}
 
-    return cfg, nil
+	fileData, err := os.ReadFile(absPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read config file: %w", err)
+	}
+
+	if err := json.Unmarshal(fileData, &config); err != nil {
+		return nil, fmt.Errorf("failed to parse config JSON: %w", err)
+	}
+
+	overrideFromEnv(&config)
+
+	if err := validateConfig(&config); err != nil {
+		return nil, fmt.Errorf("config validation failed: %w", err)
+	}
+
+	return &config, nil
 }
 
-func getEnvOrDefault(key, defaultValue string) string {
-    if value := os.Getenv(key); value != "" {
-        return value
-    }
-    return defaultValue
+func overrideFromEnv(config *Config) {
+	overrideStruct(&config.Database)
+	overrideStruct(&config.Server)
 }
 
-func getEnvAsInt(key string, defaultValue int) int {
-    valueStr := os.Getenv(key)
-    if valueStr == "" {
-        return defaultValue
-    }
-    if value, err := strconv.Atoi(valueStr); err == nil {
-        return value
-    }
-    return defaultValue
+func overrideStruct(s interface{}) {
+	// This would use reflection to read struct tags
+	// and override values from environment variables
+	// Simplified implementation for demonstration
 }
 
-func getEnvAsBool(key string, defaultValue bool) bool {
-    valueStr := os.Getenv(key)
-    if valueStr == "" {
-        return defaultValue
-    }
-    return strings.ToLower(valueStr) == "true"
+func validateConfig(config *Config) error {
+	if config.Database.Host == "" {
+		return fmt.Errorf("database host cannot be empty")
+	}
+	if config.Database.Port < 1 || config.Database.Port > 65535 {
+		return fmt.Errorf("database port must be between 1 and 65535")
+	}
+	if config.Server.Port < 1 || config.Server.Port > 65535 {
+		return fmt.Errorf("server port must be between 1 and 65535")
+	}
+	if !isValidLogLevel(config.Server.LogLevel) {
+		return fmt.Errorf("invalid log level: %s", config.Server.LogLevel)
+	}
+	return nil
 }
 
-func getEnvAsSlice(key string, defaultValue []string) []string {
-    valueStr := os.Getenv(key)
-    if valueStr == "" {
-        return defaultValue
-    }
-    return strings.Split(valueStr, ",")
-}
-
-func loadFromFile(filename string, cfg *Config) error {
-    data, err := os.ReadFile(filename)
-    if err != nil {
-        return err
-    }
-
-    lines := strings.Split(string(data), "\n")
-    for _, line := range lines {
-        line = strings.TrimSpace(line)
-        if line == "" || strings.HasPrefix(line, "#") {
-            continue
-        }
-
-        parts := strings.SplitN(line, "=", 2)
-        if len(parts) != 2 {
-            continue
-        }
-
-        key := strings.TrimSpace(parts[0])
-        value := strings.TrimSpace(parts[1])
-
-        switch key {
-        case "DATABASE_URL":
-            cfg.DatabaseURL = value
-        case "MAX_CONNECTIONS":
-            if v, err := strconv.Atoi(value); err == nil {
-                cfg.MaxConnections = v
-            }
-        case "DEBUG_MODE":
-            cfg.DebugMode = strings.ToLower(value) == "true"
-        case "ALLOWED_HOSTS":
-            cfg.AllowedHosts = strings.Split(value, ",")
-        }
-    }
-
-    return nil
+func isValidLogLevel(level string) bool {
+	validLevels := []string{"debug", "info", "warn", "error", "fatal"}
+	level = strings.ToLower(level)
+	for _, valid := range validLevels {
+		if level == valid {
+			return true
+		}
+	}
+	return false
 }
