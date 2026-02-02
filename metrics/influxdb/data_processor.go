@@ -6,140 +6,98 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"strconv"
 	"strings"
 )
 
-type DataRecord struct {
-	ID        int
-	Name      string
-	Value     float64
-	IsActive  bool
-	Timestamp string
+type DataProcessor struct {
+	InputPath  string
+	OutputPath string
 }
 
-func parseCSVFile(filename string) ([]DataRecord, error) {
-	file, err := os.Open(filename)
-	if err != nil {
-		return nil, fmt.Errorf("failed to open file: %w", err)
+func NewDataProcessor(input, output string) *DataProcessor {
+	return &DataProcessor{
+		InputPath:  input,
+		OutputPath: output,
 	}
-	defer file.Close()
+}
 
-	reader := csv.NewReader(file)
-	reader.TrimLeadingSpace = true
+func (dp *DataProcessor) Process() error {
+	inputFile, err := os.Open(dp.InputPath)
+	if err != nil {
+		return fmt.Errorf("failed to open input file: %w", err)
+	}
+	defer inputFile.Close()
 
-	var records []DataRecord
-	lineNumber := 0
+	outputFile, err := os.Create(dp.OutputPath)
+	if err != nil {
+		return fmt.Errorf("failed to create output file: %w", err)
+	}
+	defer outputFile.Close()
 
+	reader := csv.NewReader(inputFile)
+	writer := csv.NewWriter(outputFile)
+	defer writer.Flush()
+
+	headers, err := reader.Read()
+	if err != nil {
+		return fmt.Errorf("failed to read headers: %w", err)
+	}
+
+	if err := writer.Write(headers); err != nil {
+		return fmt.Errorf("failed to write headers: %w", err)
+	}
+
+	recordCount := 0
+	cleanedCount := 0
 	for {
-		lineNumber++
-		row, err := reader.Read()
+		record, err := reader.Read()
 		if err == io.EOF {
 			break
 		}
 		if err != nil {
-			return nil, fmt.Errorf("csv read error at line %d: %w", lineNumber, err)
+			continue
 		}
 
-		if len(row) != 5 {
-			return nil, fmt.Errorf("invalid column count at line %d: expected 5, got %d", lineNumber, len(row))
-		}
-
-		record, err := parseRow(row, lineNumber)
-		if err != nil {
-			return nil, err
-		}
-
-		records = append(records, record)
-	}
-
-	return records, nil
-}
-
-func parseRow(row []string, lineNumber int) (DataRecord, error) {
-	var record DataRecord
-	var err error
-
-	record.ID, err = strconv.Atoi(strings.TrimSpace(row[0]))
-	if err != nil {
-		return DataRecord{}, fmt.Errorf("invalid ID at line %d: %w", lineNumber, err)
-	}
-
-	record.Name = strings.TrimSpace(row[1])
-	if record.Name == "" {
-		return DataRecord{}, fmt.Errorf("empty name at line %d", lineNumber)
-	}
-
-	record.Value, err = strconv.ParseFloat(strings.TrimSpace(row[2]), 64)
-	if err != nil {
-		return DataRecord{}, fmt.Errorf("invalid value at line %d: %w", lineNumber, err)
-	}
-
-	record.IsActive, err = strconv.ParseBool(strings.TrimSpace(row[3]))
-	if err != nil {
-		return DataRecord{}, fmt.Errorf("invalid boolean at line %d: %w", lineNumber, err)
-	}
-
-	record.Timestamp = strings.TrimSpace(row[4])
-	if record.Timestamp == "" {
-		return DataRecord{}, fmt.Errorf("empty timestamp at line %d", lineNumber)
-	}
-
-	return record, nil
-}
-
-func validateRecords(records []DataRecord) []error {
-	var errors []error
-
-	for i, record := range records {
-		if record.ID <= 0 {
-			errors = append(errors, fmt.Errorf("record %d: invalid ID %d", i+1, record.ID))
-		}
-
-		if record.Value < 0 {
-			errors = append(errors, fmt.Errorf("record %d: negative value %f", i+1, record.Value))
-		}
-
-		if len(record.Name) > 100 {
-			errors = append(errors, fmt.Errorf("record %d: name exceeds 100 characters", i+1))
+		recordCount++
+		cleanedRecord := dp.cleanRecord(record)
+		if dp.isValidRecord(cleanedRecord) {
+			if err := writer.Write(cleanedRecord); err != nil {
+				return fmt.Errorf("failed to write record: %w", err)
+			}
+			cleanedCount++
 		}
 	}
 
-	return errors
-}
-
-func processData(filename string) error {
-	records, err := parseCSVFile(filename)
-	if err != nil {
-		return fmt.Errorf("parsing failed: %w", err)
-	}
-
-	validationErrors := validateRecords(records)
-	if len(validationErrors) > 0 {
-		for _, err := range validationErrors {
-			fmt.Printf("Validation error: %v\n", err)
-		}
-		return fmt.Errorf("validation found %d errors", len(validationErrors))
-	}
-
-	fmt.Printf("Successfully processed %d records\n", len(records))
-	for _, record := range records {
-		fmt.Printf("ID: %d, Name: %s, Value: %.2f, Active: %v, Time: %s\n",
-			record.ID, record.Name, record.Value, record.IsActive, record.Timestamp)
-	}
-
+	fmt.Printf("Processed %d records, cleaned %d records\n", recordCount, cleanedCount)
 	return nil
 }
 
+func (dp *DataProcessor) cleanRecord(record []string) []string {
+	cleaned := make([]string, len(record))
+	for i, field := range record {
+		cleaned[i] = strings.TrimSpace(field)
+	}
+	return cleaned
+}
+
+func (dp *DataProcessor) isValidRecord(record []string) bool {
+	for _, field := range record {
+		if field == "" {
+			return false
+		}
+	}
+	return true
+}
+
 func main() {
-	if len(os.Args) < 2 {
-		fmt.Println("Usage: data_processor <csv_file>")
+	if len(os.Args) != 3 {
+		fmt.Println("Usage: data_processor <input.csv> <output.csv>")
 		os.Exit(1)
 	}
 
-	filename := os.Args[1]
-	if err := processData(filename); err != nil {
-		fmt.Printf("Error: %v\n", err)
+	processor := NewDataProcessor(os.Args[1], os.Args[2])
+	if err := processor.Process(); err != nil {
+		fmt.Printf("Error processing data: %v\n", err)
 		os.Exit(1)
 	}
 }
