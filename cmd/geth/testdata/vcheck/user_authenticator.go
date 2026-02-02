@@ -3,16 +3,16 @@ package middleware
 import (
     "net/http"
     "strings"
-    "github.com/dgrijalva/jwt-go"
+    "github.com/golang-jwt/jwt/v5"
 )
 
 type Claims struct {
-    Username string `json:"username"`
-    Role     string `json:"role"`
-    jwt.StandardClaims
+    UserID string `json:"user_id"`
+    Role   string `json:"role"`
+    jwt.RegisteredClaims
 }
 
-func AuthMiddleware(next http.Handler) http.Handler {
+func Authenticate(next http.Handler) http.Handler {
     return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
         authHeader := r.Header.Get("Authorization")
         if authHeader == "" {
@@ -26,10 +26,9 @@ func AuthMiddleware(next http.Handler) http.Handler {
             return
         }
 
-        tokenString := parts[1]
+        tokenStr := parts[1]
         claims := &Claims{}
-
-        token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
+        token, err := jwt.ParseWithClaims(tokenStr, claims, func(token *jwt.Token) (interface{}, error) {
             return []byte("your-secret-key"), nil
         })
 
@@ -38,13 +37,8 @@ func AuthMiddleware(next http.Handler) http.Handler {
             return
         }
 
-        if claims.Role != "admin" && strings.HasPrefix(r.URL.Path, "/admin") {
-            http.Error(w, "Insufficient permissions", http.StatusForbidden)
-            return
-        }
-
-        r.Header.Set("X-Username", claims.Username)
-        r.Header.Set("X-Role", claims.Role)
+        r.Header.Set("X-User-ID", claims.UserID)
+        r.Header.Set("X-User-Role", claims.Role)
         next.ServeHTTP(w, r)
     })
 }
