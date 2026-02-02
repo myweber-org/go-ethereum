@@ -107,3 +107,68 @@ func main() {
         os.Exit(1)
     }
 }
+package main
+
+import (
+	"errors"
+	"strings"
+	"time"
+)
+
+type DataRecord struct {
+	ID        string
+	Value     float64
+	Timestamp time.Time
+	Category  string
+}
+
+func ValidateRecord(record DataRecord) error {
+	if record.ID == "" {
+		return errors.New("ID cannot be empty")
+	}
+	if record.Value < 0 {
+		return errors.New("value must be non-negative")
+	}
+	if record.Timestamp.After(time.Now()) {
+		return errors.New("timestamp cannot be in the future")
+	}
+	return nil
+}
+
+func TransformCategory(input string) string {
+	trimmed := strings.TrimSpace(input)
+	return strings.ToUpper(trimmed)
+}
+
+func CalculateAverage(records []DataRecord) float64 {
+	if len(records) == 0 {
+		return 0.0
+	}
+	
+	var sum float64
+	validCount := 0
+	
+	for _, record := range records {
+		if err := ValidateRecord(record); err == nil {
+			sum += record.Value
+			validCount++
+		}
+	}
+	
+	if validCount == 0 {
+		return 0.0
+	}
+	return sum / float64(validCount)
+}
+
+func FilterByCategory(records []DataRecord, category string) []DataRecord {
+	var filtered []DataRecord
+	targetCategory := TransformCategory(category)
+	
+	for _, record := range records {
+		if TransformCategory(record.Category) == targetCategory {
+			filtered = append(filtered, record)
+		}
+	}
+	return filtered
+}
