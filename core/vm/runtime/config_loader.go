@@ -6,45 +6,21 @@ import (
     "strings"
 )
 
-type DatabaseConfig struct {
-    Host     string
-    Port     int
-    Username string
-    Password string
-    Name     string
-    SSLMode  string
-}
-
-type ServerConfig struct {
-    Port         int
-    ReadTimeout  int
-    WriteTimeout int
-    DebugMode    bool
-}
-
 type Config struct {
-    Database DatabaseConfig
-    Server   ServerConfig
-    LogLevel string
+    ServerPort    int
+    DatabaseURL   string
+    LogLevel      string
+    CacheEnabled  bool
+    MaxWorkers    int
 }
 
 func LoadConfig() (*Config, error) {
     cfg := &Config{
-        Database: DatabaseConfig{
-            Host:     getEnv("DB_HOST", "localhost"),
-            Port:     getEnvAsInt("DB_PORT", 5432),
-            Username: getEnv("DB_USER", "postgres"),
-            Password: getEnv("DB_PASSWORD", ""),
-            Name:     getEnv("DB_NAME", "appdb"),
-            SSLMode:  getEnv("DB_SSL_MODE", "disable"),
-        },
-        Server: ServerConfig{
-            Port:         getEnvAsInt("SERVER_PORT", 8080),
-            ReadTimeout:  getEnvAsInt("SERVER_READ_TIMEOUT", 30),
-            WriteTimeout: getEnvAsInt("SERVER_WRITE_TIMEOUT", 30),
-            DebugMode:    getEnvAsBool("DEBUG_MODE", false),
-        },
-        LogLevel: strings.ToUpper(getEnv("LOG_LEVEL", "INFO")),
+        ServerPort:   getEnvAsInt("SERVER_PORT", 8080),
+        DatabaseURL:  getEnv("DATABASE_URL", "postgres://localhost:5432/app"),
+        LogLevel:     getEnv("LOG_LEVEL", "info"),
+        CacheEnabled: getEnvAsBool("CACHE_ENABLED", true),
+        MaxWorkers:   getEnvAsInt("MAX_WORKERS", 10),
     }
 
     if err := validateConfig(cfg); err != nil {
@@ -66,6 +42,7 @@ func getEnvAsInt(key string, defaultValue int) int {
     if strValue == "" {
         return defaultValue
     }
+    
     value, err := strconv.Atoi(strValue)
     if err != nil {
         return defaultValue
@@ -78,24 +55,35 @@ func getEnvAsBool(key string, defaultValue bool) bool {
     if strValue == "" {
         return defaultValue
     }
-    value, err := strconv.ParseBool(strValue)
-    if err != nil {
+    
+    switch strings.ToLower(strValue) {
+    case "true", "1", "yes":
+        return true
+    case "false", "0", "no":
+        return false
+    default:
         return defaultValue
     }
-    return value
 }
 
 func validateConfig(cfg *Config) error {
-    if cfg.Database.Port <= 0 || cfg.Database.Port > 65535 {
-        return &ConfigError{Field: "DB_PORT", Message: "port must be between 1 and 65535"}
-    }
-    if cfg.Server.Port <= 0 || cfg.Server.Port > 65535 {
+    if cfg.ServerPort < 1 || cfg.ServerPort > 65535 {
         return &ConfigError{Field: "SERVER_PORT", Message: "port must be between 1 and 65535"}
     }
-    validLogLevels := map[string]bool{"DEBUG": true, "INFO": true, "WARN": true, "ERROR": true}
-    if !validLogLevels[cfg.LogLevel] {
+    
+    if cfg.DatabaseURL == "" {
+        return &ConfigError{Field: "DATABASE_URL", Message: "database URL cannot be empty"}
+    }
+    
+    validLogLevels := map[string]bool{"debug": true, "info": true, "warn": true, "error": true}
+    if !validLogLevels[strings.ToLower(cfg.LogLevel)] {
         return &ConfigError{Field: "LOG_LEVEL", Message: "invalid log level"}
     }
+    
+    if cfg.MaxWorkers < 1 {
+        return &ConfigError{Field: "MAX_WORKERS", Message: "must have at least 1 worker"}
+    }
+    
     return nil
 }
 
