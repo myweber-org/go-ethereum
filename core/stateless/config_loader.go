@@ -96,3 +96,124 @@ func ValidateConfig(config *AppConfig) error {
     }
     return nil
 }
+package config
+
+import (
+    "fmt"
+    "os"
+    "strconv"
+    "strings"
+)
+
+type DatabaseConfig struct {
+    Host     string
+    Port     int
+    Username string
+    Password string
+    Database string
+    SSLMode  string
+}
+
+type ServerConfig struct {
+    Port         int
+    ReadTimeout  int
+    WriteTimeout int
+    DebugMode    bool
+}
+
+type Config struct {
+    Database DatabaseConfig
+    Server   ServerConfig
+    LogLevel string
+}
+
+func LoadConfig() (*Config, error) {
+    dbHost := getEnvOrDefault("DB_HOST", "localhost")
+    dbPort := getEnvAsInt("DB_PORT", 5432)
+    dbUser := getEnvOrDefault("DB_USER", "postgres")
+    dbPass := getEnvOrDefault("DB_PASS", "")
+    dbName := getEnvOrDefault("DB_NAME", "appdb")
+    dbSSL := getEnvOrDefault("DB_SSL_MODE", "disable")
+
+    serverPort := getEnvAsInt("SERVER_PORT", 8080)
+    readTimeout := getEnvAsInt("READ_TIMEOUT", 30)
+    writeTimeout := getEnvAsInt("WRITE_TIMEOUT", 30)
+    debugMode := getEnvAsBool("DEBUG_MODE", false)
+    logLevel := getEnvOrDefault("LOG_LEVEL", "info")
+
+    if dbPort <= 0 || dbPort > 65535 {
+        return nil, fmt.Errorf("invalid database port: %d", dbPort)
+    }
+
+    if serverPort <= 0 || serverPort > 65535 {
+        return nil, fmt.Errorf("invalid server port: %d", serverPort)
+    }
+
+    if readTimeout <= 0 || writeTimeout <= 0 {
+        return nil, fmt.Errorf("timeout values must be positive")
+    }
+
+    validLogLevels := map[string]bool{
+        "debug": true,
+        "info":  true,
+        "warn":  true,
+        "error": true,
+    }
+
+    if !validLogLevels[strings.ToLower(logLevel)] {
+        return nil, fmt.Errorf("invalid log level: %s", logLevel)
+    }
+
+    config := &Config{
+        Database: DatabaseConfig{
+            Host:     dbHost,
+            Port:     dbPort,
+            Username: dbUser,
+            Password: dbPass,
+            Database: dbName,
+            SSLMode:  dbSSL,
+        },
+        Server: ServerConfig{
+            Port:         serverPort,
+            ReadTimeout:  readTimeout,
+            WriteTimeout: writeTimeout,
+            DebugMode:    debugMode,
+        },
+        LogLevel: strings.ToLower(logLevel),
+    }
+
+    return config, nil
+}
+
+func getEnvOrDefault(key, defaultValue string) string {
+    if value := os.Getenv(key); value != "" {
+        return value
+    }
+    return defaultValue
+}
+
+func getEnvAsInt(key string, defaultValue int) int {
+    valueStr := os.Getenv(key)
+    if valueStr == "" {
+        return defaultValue
+    }
+
+    value, err := strconv.Atoi(valueStr)
+    if err != nil {
+        return defaultValue
+    }
+    return value
+}
+
+func getEnvAsBool(key string, defaultValue bool) bool {
+    valueStr := os.Getenv(key)
+    if valueStr == "" {
+        return defaultValue
+    }
+
+    value, err := strconv.ParseBool(valueStr)
+    if err != nil {
+        return defaultValue
+    }
+    return value
+}
