@@ -1,134 +1,68 @@
+
 package main
 
 import (
-	"fmt"
-	"strings"
-)
-
-type DataCleaner struct {
-	seen map[string]bool
-}
-
-func NewDataCleaner() *DataCleaner {
-	return &DataCleaner{
-		seen: make(map[string]bool),
-	}
-}
-
-func (dc *DataCleaner) Normalize(input string) string {
-	return strings.ToLower(strings.TrimSpace(input))
-}
-
-func (dc *DataCleaner) IsDuplicate(value string) bool {
-	normalized := dc.Normalize(value)
-	if dc.seen[normalized] {
-		return true
-	}
-	dc.seen[normalized] = true
-	return false
-}
-
-func (dc *DataCleaner) Deduplicate(values []string) []string {
-	dc.seen = make(map[string]bool)
-	var result []string
-	for _, v := range values {
-		if !dc.IsDuplicate(v) {
-			result = append(result, v)
-		}
-	}
-	return result
-}
-
-func main() {
-	cleaner := NewDataCleaner()
-	
-	data := []string{"Apple", "apple ", " BANANA", "banana", "Cherry"}
-	fmt.Println("Original:", data)
-	
-	deduped := cleaner.Deduplicate(data)
-	fmt.Println("Deduplicated:", deduped)
-	
-	testValue := "  APPLE  "
-	fmt.Printf("Is '%s' duplicate? %v\n", testValue, cleaner.IsDuplicate(testValue))
-}package main
-
-import (
-	"encoding/csv"
-	"fmt"
-	"io"
-	"os"
-	"strings"
+    "encoding/csv"
+    "fmt"
+    "io"
+    "os"
+    "strings"
 )
 
 func cleanCSV(inputPath, outputPath string) error {
-	inFile, err := os.Open(inputPath)
-	if err != nil {
-		return fmt.Errorf("failed to open input file: %w", err)
-	}
-	defer inFile.Close()
+    inputFile, err := os.Open(inputPath)
+    if err != nil {
+        return fmt.Errorf("failed to open input file: %w", err)
+    }
+    defer inputFile.Close()
 
-	outFile, err := os.Create(outputPath)
-	if err != nil {
-		return fmt.Errorf("failed to create output file: %w", err)
-	}
-	defer outFile.Close()
+    outputFile, err := os.Create(outputPath)
+    if err != nil {
+        return fmt.Errorf("failed to create output file: %w", err)
+    }
+    defer outputFile.Close()
 
-	reader := csv.NewReader(inFile)
-	writer := csv.NewWriter(outFile)
-	defer writer.Flush()
+    reader := csv.NewReader(inputFile)
+    writer := csv.NewWriter(outputFile)
+    defer writer.Flush()
 
-	headers, err := reader.Read()
-	if err != nil {
-		return fmt.Errorf("failed to read headers: %w", err)
-	}
+    for {
+        record, err := reader.Read()
+        if err == io.EOF {
+            break
+        }
+        if err != nil {
+            return fmt.Errorf("error reading CSV record: %w", err)
+        }
 
-	cleanedHeaders := make([]string, len(headers))
-	for i, h := range headers {
-		cleanedHeaders[i] = strings.TrimSpace(strings.ToLower(h))
-	}
-	if err := writer.Write(cleanedHeaders); err != nil {
-		return fmt.Errorf("failed to write headers: %w", err)
-	}
+        cleanedRecord := make([]string, len(record))
+        for i, field := range record {
+            cleanedField := strings.TrimSpace(field)
+            cleanedField = strings.ToLower(cleanedField)
+            cleanedRecord[i] = cleanedField
+        }
 
-	for {
-		record, err := reader.Read()
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			return fmt.Errorf("failed to read record: %w", err)
-		}
+        if err := writer.Write(cleanedRecord); err != nil {
+            return fmt.Errorf("error writing CSV record: %w", err)
+        }
+    }
 
-		cleanedRecord := make([]string, len(record))
-		for i, field := range record {
-			cleanedField := strings.TrimSpace(field)
-			if cleanedField == "" {
-				cleanedField = "N/A"
-			}
-			cleanedRecord[i] = cleanedField
-		}
-
-		if err := writer.Write(cleanedRecord); err != nil {
-			return fmt.Errorf("failed to write record: %w", err)
-		}
-	}
-
-	return nil
+    return nil
 }
 
 func main() {
-	if len(os.Args) != 3 {
-		fmt.Println("Usage: data_cleaner <input.csv> <output.csv>")
-		os.Exit(1)
-	}
+    if len(os.Args) != 3 {
+        fmt.Println("Usage: go run data_cleaner.go <input.csv> <output.csv>")
+        os.Exit(1)
+    }
 
-	inputFile := os.Args[1]
-	outputFile := os.Args[2]
+    inputFile := os.Args[1]
+    outputFile := os.Args[2]
 
-	if err := cleanCSV(inputFile, outputFile); err != nil {
-		fmt.Printf("Error: %v\n", err)
-		os.Exit(1)
-	}
+    if err := cleanCSV(inputFile, outputFile); err != nil {
+        fmt.Printf("Error: %v\n", err)
+        os.Exit(1)
+    }
 
-	fmt.Printf("Successfully cleaned data. Output saved to %s\n", outputFile)
+    fmt.Printf("Successfully cleaned CSV file. Output saved to %s\n", outputFile)
 }
