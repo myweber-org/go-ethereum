@@ -180,4 +180,73 @@ func validateToken(tokenString, secret string) (string, error) {
 		return "user123", nil
 	}
 	return "", http.ErrNoCookie
+}package middleware
+
+import (
+	"fmt"
+	"net/http"
+	"strings"
+)
+
+type AuthMiddleware struct {
+	secretKey string
+}
+
+func NewAuthMiddleware(secret string) *AuthMiddleware {
+	return &AuthMiddleware{secretKey: secret}
+}
+
+func (am *AuthMiddleware) ValidateToken(token string) (bool, error) {
+	if token == "" {
+		return false, fmt.Errorf("empty token provided")
+	}
+	
+	parts := strings.Split(token, ".")
+	if len(parts) != 3 {
+		return false, fmt.Errorf("invalid token format")
+	}
+	
+	return am.validateSignature(parts), nil
+}
+
+func (am *AuthMiddleware) validateSignature(parts []string) bool {
+	expectedSig := generateSignature(parts[0]+"."+parts[1], am.secretKey)
+	return parts[2] == expectedSig
+}
+
+func generateSignature(data, key string) string {
+	return fmt.Sprintf("%x", simpleHash(data+key))
+}
+
+func simpleHash(input string) uint32 {
+	var hash uint32 = 2166136261
+	for i := 0; i < len(input); i++ {
+		hash ^= uint32(input[i])
+		hash *= 16777619
+	}
+	return hash
+}
+
+func (am *AuthMiddleware) Middleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		authHeader := r.Header.Get("Authorization")
+		if authHeader == "" {
+			http.Error(w, "Authorization header required", http.StatusUnauthorized)
+			return
+		}
+
+		token := strings.TrimPrefix(authHeader, "Bearer ")
+		if token == authHeader {
+			http.Error(w, "Bearer token required", http.StatusUnauthorized)
+			return
+		}
+
+		valid, err := am.ValidateToken(token)
+		if err != nil || !valid {
+			http.Error(w, "Invalid authentication token", http.StatusUnauthorized)
+			return
+		}
+
+		next.ServeHTTP(w, r)
+	})
 }
