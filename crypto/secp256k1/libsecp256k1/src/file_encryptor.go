@@ -6,7 +6,6 @@ import (
 	"crypto/cipher"
 	"crypto/rand"
 	"encoding/hex"
-	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -15,71 +14,62 @@ import (
 func encryptFile(inputPath, outputPath string, key []byte) error {
 	plaintext, err := os.ReadFile(inputPath)
 	if err != nil {
-		return fmt.Errorf("read file failed: %w", err)
+		return err
 	}
 
 	block, err := aes.NewCipher(key)
 	if err != nil {
-		return fmt.Errorf("create cipher failed: %w", err)
+		return err
 	}
 
 	gcm, err := cipher.NewGCM(block)
 	if err != nil {
-		return fmt.Errorf("create GCM failed: %w", err)
+		return err
 	}
 
 	nonce := make([]byte, gcm.NonceSize())
 	if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
-		return fmt.Errorf("generate nonce failed: %w", err)
+		return err
 	}
 
 	ciphertext := gcm.Seal(nonce, nonce, plaintext, nil)
-
-	if err := os.WriteFile(outputPath, ciphertext, 0644); err != nil {
-		return fmt.Errorf("write file failed: %w", err)
-	}
-
-	return nil
+	return os.WriteFile(outputPath, ciphertext, 0644)
 }
 
 func decryptFile(inputPath, outputPath string, key []byte) error {
 	ciphertext, err := os.ReadFile(inputPath)
 	if err != nil {
-		return fmt.Errorf("read file failed: %w", err)
+		return err
 	}
 
 	block, err := aes.NewCipher(key)
 	if err != nil {
-		return fmt.Errorf("create cipher failed: %w", err)
+		return err
 	}
 
 	gcm, err := cipher.NewGCM(block)
 	if err != nil {
-		return fmt.Errorf("create GCM failed: %w", err)
+		return err
 	}
 
 	nonceSize := gcm.NonceSize()
 	if len(ciphertext) < nonceSize {
-		return errors.New("ciphertext too short")
+		return fmt.Errorf("ciphertext too short")
 	}
 
 	nonce, ciphertext := ciphertext[:nonceSize], ciphertext[nonceSize:]
 	plaintext, err := gcm.Open(nil, nonce, ciphertext, nil)
 	if err != nil {
-		return fmt.Errorf("decrypt failed: %w", err)
+		return err
 	}
 
-	if err := os.WriteFile(outputPath, plaintext, 0644); err != nil {
-		return fmt.Errorf("write file failed: %w", err)
-	}
-
-	return nil
+	return os.WriteFile(outputPath, plaintext, 0644)
 }
 
 func generateKey() ([]byte, error) {
 	key := make([]byte, 32)
 	if _, err := rand.Read(key); err != nil {
-		return nil, fmt.Errorf("generate key failed: %w", err)
+		return nil, err
 	}
 	return key, nil
 }
@@ -87,37 +77,51 @@ func generateKey() ([]byte, error) {
 func main() {
 	if len(os.Args) < 4 {
 		fmt.Println("Usage: go run file_encryptor.go <encrypt|decrypt> <input> <output>")
-		fmt.Println("Example: go run file_encryptor.go encrypt secret.txt secret.enc")
+		fmt.Println("For key generation: go run file_encryptor.go genkey")
 		os.Exit(1)
 	}
 
-	operation := os.Args[1]
-	inputFile := os.Args[2]
-	outputFile := os.Args[3]
+	command := os.Args[1]
 
-	key, err := generateKey()
+	if command == "genkey" {
+		key, err := generateKey()
+		if err != nil {
+			fmt.Printf("Key generation failed: %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Printf("Generated key: %s\n", hex.EncodeToString(key))
+		return
+	}
+
+	if len(os.Args) != 5 {
+		fmt.Println("For encryption/decryption: go run file_encryptor.go <encrypt|decrypt> <input> <output> <key_hex>")
+		os.Exit(1)
+	}
+
+	inputPath := os.Args[2]
+	outputPath := os.Args[3]
+	keyHex := os.Args[4]
+
+	key, err := hex.DecodeString(keyHex)
 	if err != nil {
-		fmt.Printf("Key generation error: %v\n", err)
+		fmt.Printf("Invalid key format: %v\n", err)
 		os.Exit(1)
 	}
 
-	fmt.Printf("Generated key: %s\n", hex.EncodeToString(key))
-
-	switch operation {
+	switch command {
 	case "encrypt":
-		if err := encryptFile(inputFile, outputFile, key); err != nil {
-			fmt.Printf("Encryption error: %v\n", err)
-			os.Exit(1)
-		}
-		fmt.Println("File encrypted successfully")
+		err = encryptFile(inputPath, outputPath, key)
 	case "decrypt":
-		if err := decryptFile(inputFile, outputFile, key); err != nil {
-			fmt.Printf("Decryption error: %v\n", err)
-			os.Exit(1)
-		}
-		fmt.Println("File decrypted successfully")
+		err = decryptFile(inputPath, outputPath, key)
 	default:
-		fmt.Println("Invalid operation. Use 'encrypt' or 'decrypt'")
+		fmt.Printf("Unknown command: %s\n", command)
 		os.Exit(1)
 	}
+
+	if err != nil {
+		fmt.Printf("Operation failed: %v\n", err)
+		os.Exit(1)
+	}
+
+	fmt.Printf("Operation completed successfully\n")
 }
