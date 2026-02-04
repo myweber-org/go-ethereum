@@ -6,85 +6,48 @@ import (
 	"strings"
 )
 
-type DataRecord struct {
-	ID    int
-	Email string
-	Valid bool
+type DataCleaner struct {
+	seen map[string]bool
 }
 
-func deduplicateRecords(records []DataRecord) []DataRecord {
-	seen := make(map[string]bool)
-	var unique []DataRecord
-
-	for _, record := range records {
-		key := strings.ToLower(strings.TrimSpace(record.Email))
-		if !seen[key] {
-			seen[key] = true
-			unique = append(unique, record)
-		}
-	}
-	return unique
-}
-
-func validateEmail(email string) bool {
-	if len(email) == 0 {
-		return false
-	}
-	return strings.Contains(email, "@") && strings.Contains(email, ".")
-}
-
-func cleanData(records []DataRecord) []DataRecord {
-	var cleaned []DataRecord
-	for _, record := range records {
-		if validateEmail(record.Email) {
-			record.Valid = true
-			cleaned = append(cleaned, record)
-		}
-	}
-	return deduplicateRecords(cleaned)
-}
-
-func main() {
-	sampleData := []DataRecord{
-		{1, "user@example.com", false},
-		{2, "invalid-email", false},
-		{3, "user@example.com", false},
-		{4, "another@test.org", false},
-	}
-
-	cleaned := cleanData(sampleData)
-	fmt.Printf("Original: %d records\n", len(sampleData))
-	fmt.Printf("Cleaned: %d records\n", len(cleaned))
-	for _, record := range cleaned {
-		fmt.Printf("ID: %d, Email: %s, Valid: %v\n", record.ID, record.Email, record.Valid)
+func NewDataCleaner() *DataCleaner {
+	return &DataCleaner{
+		seen: make(map[string]bool),
 	}
 }
-package main
 
-import (
-	"fmt"
-	"sort"
-)
-
-func cleanData(data []string) []string {
-	seen := make(map[string]struct{})
-	unique := []string{}
-
-	for _, item := range data {
-		if _, exists := seen[item]; !exists {
-			seen[item] = struct{}{}
+func (dc *DataCleaner) Deduplicate(items []string) []string {
+	var unique []string
+	for _, item := range items {
+		normalized := dc.Normalize(item)
+		if !dc.seen[normalized] {
+			dc.seen[normalized] = true
 			unique = append(unique, item)
 		}
 	}
-
-	sort.Strings(unique)
 	return unique
 }
 
-func main() {
-	rawData := []string{"zebra", "apple", "banana", "apple", "cherry", "banana"}
-	cleaned := cleanData(rawData)
+func (dc *DataCleaner) Normalize(s string) string {
+	return strings.ToLower(strings.TrimSpace(s))
+}
 
-	fmt.Println("Original:", rawData)
+func (dc *DataCleaner) Reset() {
+	dc.seen = make(map[string]bool)
+}
+
+func main() {
+	cleaner := NewDataCleaner()
+	
+	data := []string{"Apple", "apple ", " BANANA", "banana", "Cherry"}
+	cleaned := cleaner.Deduplicate(data)
+	
+	fmt.Println("Original:", data)
 	fmt.Println("Cleaned:", cleaned)
+	
+	cleaner.Reset()
+	
+	moreData := []string{"grape", "GRAPE", "orange"}
+	moreCleaned := cleaner.Deduplicate(moreData)
+	fmt.Println("More cleaned:", moreCleaned)
 }
