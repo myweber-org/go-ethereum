@@ -28,11 +28,12 @@ func (al *ActivityLogger) LogActivity(next http.Handler) http.Handler {
 		duration := time.Since(start)
 		
 		al.Logger.Printf(
-			"Method: %s | Path: %s | Status: %d | Duration: %v | User-Agent: %s",
+			"Method: %s | Path: %s | Status: %d | Duration: %v | RemoteAddr: %s | UserAgent: %s",
 			r.Method,
 			r.URL.Path,
 			recorder.statusCode,
 			duration,
+			r.RemoteAddr,
 			r.UserAgent(),
 		)
 	})
