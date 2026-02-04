@@ -72,4 +72,96 @@ func ValidateConfig(cfg *AppConfig) error {
 	}
 	
 	return nil
+}package config
+
+import (
+	"os"
+	"strconv"
+	"strings"
+)
+
+type AppConfig struct {
+	ServerPort int
+	DBHost     string
+	DBPort     int
+	DebugMode  bool
+	FeatureFlags map[string]bool
+}
+
+func LoadConfig() (*AppConfig, error) {
+	cfg := &AppConfig{
+		ServerPort: getEnvAsInt("SERVER_PORT", 8080),
+		DBHost:     getEnv("DB_HOST", "localhost"),
+		DBPort:     getEnvAsInt("DB_PORT", 5432),
+		DebugMode:  getEnvAsBool("DEBUG_MODE", false),
+		FeatureFlags: parseFeatureFlags(getEnv("FEATURE_FLAGS", "")),
+	}
+
+	if err := validateConfig(cfg); err != nil {
+		return nil, err
+	}
+
+	return cfg, nil
+}
+
+func getEnv(key, defaultValue string) string {
+	if value, exists := os.LookupEnv(key); exists {
+		return value
+	}
+	return defaultValue
+}
+
+func getEnvAsInt(key string, defaultValue int) int {
+	valueStr := getEnv(key, "")
+	if value, err := strconv.Atoi(valueStr); err == nil {
+		return value
+	}
+	return defaultValue
+}
+
+func getEnvAsBool(key string, defaultValue bool) bool {
+	valueStr := getEnv(key, "")
+	if value, err := strconv.ParseBool(valueStr); err == nil {
+		return value
+	}
+	return defaultValue
+}
+
+func parseFeatureFlags(flagsStr string) map[string]bool {
+	flags := make(map[string]bool)
+	if flagsStr == "" {
+		return flags
+	}
+
+	items := strings.Split(flagsStr, ",")
+	for _, item := range items {
+		parts := strings.SplitN(item, "=", 2)
+		if len(parts) == 2 {
+			flagName := strings.TrimSpace(parts[0])
+			flagValue := strings.TrimSpace(parts[1])
+			if boolValue, err := strconv.ParseBool(flagValue); err == nil {
+				flags[flagName] = boolValue
+			}
+		}
+	}
+	return flags
+}
+
+func validateConfig(cfg *AppConfig) error {
+	if cfg.ServerPort < 1 || cfg.ServerPort > 65535 {
+		return &ConfigError{Field: "SERVER_PORT", Value: cfg.ServerPort}
+	}
+	if cfg.DBPort < 1 || cfg.DBPort > 65535 {
+		return &ConfigError{Field: "DB_PORT", Value: cfg.DBPort}
+	}
+	return nil
+}
+
+type ConfigError struct {
+	Field string
+	Value interface{}
+}
+
+func (e *ConfigError) Error() string {
+	return "invalid configuration value for field: " + e.Field
 }
