@@ -148,4 +148,51 @@ func (rl *RotatingLogger) Close() error {
 		return rl.currentFile.Close()
 	}
 	return nil
+}package main
+
+import (
+    "fmt"
+    "os"
+    "path/filepath"
+    "time"
+)
+
+func rotateLog(logFilePath string) error {
+    // Check if the log file exists
+    if _, err := os.Stat(logFilePath); os.IsNotExist(err) {
+        return fmt.Errorf("log file does not exist: %s", logFilePath)
+    }
+
+    // Generate timestamp suffix
+    timestamp := time.Now().Format("20060102_150405")
+    ext := filepath.Ext(logFilePath)
+    baseName := logFilePath[:len(logFilePath)-len(ext)]
+    rotatedFilePath := fmt.Sprintf("%s_%s%s", baseName, timestamp, ext)
+
+    // Rename the current log file
+    err := os.Rename(logFilePath, rotatedFilePath)
+    if err != nil {
+        return fmt.Errorf("failed to rename log file: %v", err)
+    }
+
+    // Create a new empty log file
+    newFile, err := os.Create(logFilePath)
+    if err != nil {
+        // Attempt to rollback the rename if creating new file fails
+        os.Rename(rotatedFilePath, logFilePath)
+        return fmt.Errorf("failed to create new log file: %v", err)
+    }
+    newFile.Close()
+
+    fmt.Printf("Log rotated successfully. Old file: %s\n", rotatedFilePath)
+    return nil
+}
+
+func main() {
+    // Example usage: rotate a log file named "application.log"
+    err := rotateLog("application.log")
+    if err != nil {
+        fmt.Printf("Error rotating log: %v\n", err)
+        os.Exit(1)
+    }
 }
