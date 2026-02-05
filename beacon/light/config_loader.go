@@ -3,64 +3,99 @@ package config
 import (
     "fmt"
     "os"
-    "path/filepath"
-
-    "gopkg.in/yaml.v3"
+    "strconv"
+    "strings"
 )
 
 type DatabaseConfig struct {
-    Host     string `yaml:"host"`
-    Port     int    `yaml:"port"`
-    Username string `yaml:"username"`
-    Password string `yaml:"password"`
-    Name     string `yaml:"name"`
+    Host     string
+    Port     int
+    Username string
+    Password string
+    Database string
 }
 
 type ServerConfig struct {
-    Port         int            `yaml:"port"`
-    ReadTimeout  int            `yaml:"read_timeout"`
-    WriteTimeout int            `yaml:"write_timeout"`
-    Database     DatabaseConfig `yaml:"database"`
+    Port         int
+    ReadTimeout  int
+    WriteTimeout int
+    DebugMode    bool
 }
 
-func LoadConfig(configPath string) (*ServerConfig, error) {
-    absPath, err := filepath.Abs(configPath)
-    if err != nil {
-        return nil, fmt.Errorf("failed to resolve config path: %w", err)
-    }
-
-    data, err := os.ReadFile(absPath)
-    if err != nil {
-        return nil, fmt.Errorf("failed to read config file: %w", err)
-    }
-
-    var config ServerConfig
-    if err := yaml.Unmarshal(data, &config); err != nil {
-        return nil, fmt.Errorf("failed to parse YAML config: %w", err)
-    }
-
-    if config.Port == 0 {
-        config.Port = 8080
-    }
-    if config.ReadTimeout == 0 {
-        config.ReadTimeout = 30
-    }
-    if config.WriteTimeout == 0 {
-        config.WriteTimeout = 30
-    }
-
-    return &config, nil
+type Config struct {
+    Database DatabaseConfig
+    Server   ServerConfig
+    LogLevel string
 }
 
-func ValidateConfig(config *ServerConfig) error {
-    if config.Database.Host == "" {
-        return fmt.Errorf("database host is required")
+func LoadConfig() (*Config, error) {
+    cfg := &Config{}
+
+    dbHost := getEnvWithDefault("DB_HOST", "localhost")
+    dbPort := getEnvIntWithDefault("DB_PORT", 5432)
+    dbUser := getEnvWithDefault("DB_USER", "postgres")
+    dbPass := getEnvWithDefault("DB_PASS", "")
+    dbName := getEnvWithDefault("DB_NAME", "appdb")
+
+    cfg.Database = DatabaseConfig{
+        Host:     dbHost,
+        Port:     dbPort,
+        Username: dbUser,
+        Password: dbPass,
+        Database: dbName,
     }
-    if config.Database.Port <= 0 || config.Database.Port > 65535 {
-        return fmt.Errorf("database port must be between 1 and 65535")
+
+    srvPort := getEnvIntWithDefault("SERVER_PORT", 8080)
+    readTimeout := getEnvIntWithDefault("READ_TIMEOUT", 30)
+    writeTimeout := getEnvIntWithDefault("WRITE_TIMEOUT", 30)
+    debugMode := getEnvBoolWithDefault("DEBUG_MODE", false)
+
+    cfg.Server = ServerConfig{
+        Port:         srvPort,
+        ReadTimeout:  readTimeout,
+        WriteTimeout: writeTimeout,
+        DebugMode:    debugMode,
     }
-    if config.Database.Name == "" {
-        return fmt.Errorf("database name is required")
+
+    logLevel := getEnvWithDefault("LOG_LEVEL", "info")
+    allowedLevels := map[string]bool{"debug": true, "info": true, "warn": true, "error": true}
+    if !allowedLevels[strings.ToLower(logLevel)] {
+        return nil, fmt.Errorf("invalid log level: %s", logLevel)
     }
-    return nil
+    cfg.LogLevel = strings.ToLower(logLevel)
+
+    if cfg.Database.Password == "" {
+        return nil, fmt.Errorf("database password must be set")
+    }
+
+    if cfg.Server.Port < 1 || cfg.Server.Port > 65535 {
+        return nil, fmt.Errorf("invalid server port: %d", cfg.Server.Port)
+    }
+
+    return cfg, nil
+}
+
+func getEnvWithDefault(key, defaultValue string) string {
+    if value := os.Getenv(key); value != "" {
+        return value
+    }
+    return defaultValue
+}
+
+func getEnvIntWithDefault(key string, defaultValue int) int {
+    if value := os.Getenv(key); value != "" {
+        if intVal, err := strconv.Atoi(value); err == nil {
+            return intVal
+        }
+    }
+    return defaultValue
+}
+
+func getEnvBoolWithDefault(key string, defaultValue bool) bool {
+    if value := os.Getenv(key); value != "" {
+        if boolVal, err := strconv.ParseBool(value); err == nil {
+            return boolVal
+        }
+    }
+    return defaultValue
 }
