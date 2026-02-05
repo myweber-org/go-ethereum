@@ -10,7 +10,7 @@ type contextKey string
 
 const userIDKey contextKey = "userID"
 
-func Authenticate(next http.Handler) http.Handler {
+func AuthMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		authHeader := r.Header.Get("Authorization")
 		if authHeader == "" {
@@ -36,16 +36,14 @@ func Authenticate(next http.Handler) http.Handler {
 	})
 }
 
-func validateToken(tokenString string) (string, error) {
-	// Simplified token validation logic
-	// In production, use a proper JWT library
-	if tokenString == "valid_token_example" {
-		return "user123", nil
-	}
-	return "", http.ErrNoCookie
-}
-
 func GetUserID(ctx context.Context) (string, bool) {
 	userID, ok := ctx.Value(userIDKey).(string)
 	return userID, ok
+}
+
+func validateToken(tokenString string) (string, error) {
+	// This is a placeholder for actual JWT validation logic
+	// In a real implementation, you would parse and verify the JWT
+	// and extract the user ID from its claims
+	return "example-user-id", nil
 }
