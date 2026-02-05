@@ -62,4 +62,39 @@ func main() {
 	for _, record := range cleaned {
 		fmt.Printf("ID: %d, Email: %s, Valid: %v\n", record.ID, record.Email, record.Valid)
 	}
+}package main
+
+import (
+	"strings"
+)
+
+// DataCleaner provides methods for cleaning string data
+type DataCleaner struct{}
+
+// RemoveDuplicates removes duplicate entries from a slice of strings
+func (dc *DataCleaner) RemoveDuplicates(input []string) []string {
+	seen := make(map[string]bool)
+	result := []string{}
+	for _, item := range input {
+		if !seen[item] {
+			seen[item] = true
+			result = append(result, item)
+		}
+	}
+	return result
+}
+
+// TrimSpaces removes leading and trailing whitespace from all strings in slice
+func (dc *DataCleaner) TrimSpaces(input []string) []string {
+	result := make([]string, len(input))
+	for i, item := range input {
+		result[i] = strings.TrimSpace(item)
+	}
+	return result
+}
+
+// CleanData performs both duplicate removal and whitespace trimming
+func (dc *DataCleaner) CleanData(input []string) []string {
+	trimmed := dc.TrimSpaces(input)
+	return dc.RemoveDuplicates(trimmed)
 }
