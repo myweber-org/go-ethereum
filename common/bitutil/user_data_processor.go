@@ -1,0 +1,48 @@
+package main
+
+import (
+	"regexp"
+	"strings"
+)
+
+type UserData struct {
+	Username string
+	Email    string
+	Age      int
+}
+
+func ValidateUsername(username string) bool {
+	if len(username) < 3 || len(username) > 20 {
+		return false
+	}
+	validPattern := regexp.MustCompile(`^[a-zA-Z0-9_]+$`)
+	return validPattern.MatchString(username)
+}
+
+func SanitizeEmail(email string) string {
+	trimmed := strings.TrimSpace(email)
+	return strings.ToLower(trimmed)
+}
+
+func ValidateUserAge(age int) bool {
+	return age >= 13 && age <= 120
+}
+
+func ProcessUserInput(data UserData) (UserData, error) {
+	if !ValidateUsername(data.Username) {
+		return data, ErrInvalidUsername
+	}
+
+	data.Email = SanitizeEmail(data.Email)
+
+	if !ValidateUserAge(data.Age) {
+		return data, ErrInvalidAge
+	}
+
+	return data, nil
+}
+
+var (
+	ErrInvalidUsername = errors.New("invalid username format")
+	ErrInvalidAge      = errors.New("age must be between 13 and 120")
+)
