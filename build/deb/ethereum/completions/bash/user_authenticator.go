@@ -7,8 +7,8 @@ import (
 )
 
 type Claims struct {
-    Username string `json:"username"`
-    Role     string `json:"role"`
+    UserID string `json:"user_id"`
+    Role   string `json:"role"`
     jwt.RegisteredClaims
 }
 
@@ -21,23 +21,24 @@ func AuthMiddleware(secretKey string) func(http.Handler) http.Handler {
                 return
             }
 
-            tokenString := strings.TrimPrefix(authHeader, "Bearer ")
-            if tokenString == authHeader {
-                http.Error(w, "Bearer token required", http.StatusUnauthorized)
+            parts := strings.Split(authHeader, " ")
+            if len(parts) != 2 || parts[0] != "Bearer" {
+                http.Error(w, "Invalid authorization format", http.StatusUnauthorized)
                 return
             }
 
+            tokenStr := parts[1]
             claims := &Claims{}
-            token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
+            token, err := jwt.ParseWithClaims(tokenStr, claims, func(token *jwt.Token) (interface{}, error) {
                 return []byte(secretKey), nil
             })
 
             if err != nil || !token.Valid {
-                http.Error(w, "Invalid token", http.StatusUnauthorized)
+                http.Error(w, "Invalid or expired token", http.StatusUnauthorized)
                 return
             }
 
-            r.Header.Set("X-Username", claims.Username)
+            r.Header.Set("X-User-ID", claims.UserID)
             r.Header.Set("X-User-Role", claims.Role)
             next.ServeHTTP(w, r)
         })
