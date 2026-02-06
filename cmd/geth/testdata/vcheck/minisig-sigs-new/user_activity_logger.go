@@ -1,4 +1,4 @@
-package main
+package middleware
 
 import (
 	"log"
@@ -7,40 +7,95 @@ import (
 )
 
 type ActivityLogger struct {
-	handler http.Handler
+	rateLimiter *RateLimiter
 }
 
-func (al *ActivityLogger) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	start := time.Now()
-	al.handler.ServeHTTP(w, r)
-	duration := time.Since(start)
-
-	log.Printf("[%s] %s %s %s %v",
-		time.Now().Format(time.RFC3339),
-		r.Method,
-		r.URL.Path,
-		r.RemoteAddr,
-		duration)
+type RateLimiter struct {
+	requests map[string][]time.Time
+	limit    int
+	window   time.Duration
 }
 
-func NewActivityLogger(handler http.Handler) *ActivityLogger {
-	return &ActivityLogger{handler: handler}
+func NewActivityLogger(limit int, window time.Duration) *ActivityLogger {
+	return &ActivityLogger{
+		rateLimiter: &RateLimiter{
+			requests: make(map[string][]time.Time),
+			limit:    limit,
+			window:   window,
+		},
+	}
 }
 
-func apiHandler(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(`{"status": "ok"}`))
+func (al *ActivityLogger) LogActivity(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		clientIP := r.RemoteAddr
+		
+		if !al.rateLimiter.Allow(clientIP) {
+			http.Error(w, "Too many requests", http.StatusTooManyRequests)
+			return
+		}
+		
+		start := time.Now()
+		
+		defer func() {
+			duration := time.Since(start)
+			log.Printf("Activity: %s %s from %s took %v", r.Method, r.URL.Path, clientIP, duration)
+		}()
+		
+		next.ServeHTTP(w, r)
+	})
 }
 
-func main() {
-	mux := http.NewServeMux()
-	mux.HandleFunc("/api/data", apiHandler)
+func (rl *RateLimiter) Allow(clientIP string) bool {
+	now := time.Now()
+	windowStart := now.Add(-rl.window)
+	
+	requests := rl.requests[clientIP]
+	var validRequests []time.Time
+	
+	for _, reqTime := range requests {
+		if reqTime.After(windowStart) {
+			validRequests = append(validRequests, reqTime)
+		}
+	}
+	
+	if len(validRequests) >= rl.limit {
+		return false
+	}
+	
+	validRequests = append(validRequests, now)
+	rl.requests[clientIP] = validRequests
+	
+	return true
+}
 
-	loggedMux := NewActivityLogger(mux)
+func (rl *RateLimiter) Cleanup() {
+	ticker := time.NewTicker(rl.window * 2)
+	
+	go func() {
+		for range ticker.C {
+			rl.cleanupExpired()
+		}
+	}()
+}
 
-	log.Println("Server starting on :8080")
-	if err := http.ListenAndServe(":8080", loggedMux); err != nil {
-		log.Fatal(err)
+func (rl *RateLimiter) cleanupExpired() {
+	now := time.Now()
+	windowStart := now.Add(-rl.window)
+	
+	for clientIP, requests := range rl.requests {
+		var validRequests []time.Time
+		
+		for _, reqTime := range requests {
+			if reqTime.After(windowStart) {
+				validRequests = append(validRequests, reqTime)
+			}
+		}
+		
+		if len(validRequests) == 0 {
+			delete(rl.requests, clientIP)
+		} else {
+			rl.requests[clientIP] = validRequests
+		}
 	}
 }
