@@ -1,48 +1,41 @@
-
 package main
 
 import (
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/rand"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"io"
-	"os"
 )
 
-const keySize = 32
-
-func generateKey() ([]byte, error) {
-	key := make([]byte, keySize)
-	_, err := rand.Read(key)
-	if err != nil {
-		return nil, err
-	}
-	return key, nil
-}
-
-func encryptData(plaintext []byte, key []byte) ([]byte, error) {
+func encrypt(plaintext []byte, key []byte) (string, error) {
 	block, err := aes.NewCipher(key)
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 
 	gcm, err := cipher.NewGCM(block)
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 
 	nonce := make([]byte, gcm.NonceSize())
 	if _, err = io.ReadFull(rand.Reader, nonce); err != nil {
-		return nil, err
+		return "", err
 	}
 
 	ciphertext := gcm.Seal(nonce, nonce, plaintext, nil)
-	return ciphertext, nil
+	return base64.StdEncoding.EncodeToString(ciphertext), nil
 }
 
-func decryptData(ciphertext []byte, key []byte) ([]byte, error) {
+func decrypt(encodedCiphertext string, key []byte) ([]byte, error) {
+	ciphertext, err := base64.StdEncoding.DecodeString(encodedCiphertext)
+	if err != nil {
+		return nil, err
+	}
+
 	block, err := aes.NewCipher(key)
 	if err != nil {
 		return nil, err
@@ -59,41 +52,27 @@ func decryptData(ciphertext []byte, key []byte) ([]byte, error) {
 	}
 
 	nonce, ciphertext := ciphertext[:nonceSize], ciphertext[nonceSize:]
-	plaintext, err := gcm.Open(nil, nonce, ciphertext, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	return plaintext, nil
+	return gcm.Open(nil, nonce, ciphertext, nil)
 }
 
 func main() {
-	key, err := generateKey()
+	key := make([]byte, 32)
+	if _, err := io.ReadFull(rand.Reader, key); err != nil {
+		panic(err)
+	}
+
+	message := "Sensitive data requiring encryption"
+	encrypted, err := encrypt([]byte(message), key)
 	if err != nil {
-		fmt.Printf("Key generation failed: %v\n", err)
-		os.Exit(1)
+		panic(err)
 	}
 
-	originalData := []byte("Sensitive information requiring protection")
-	fmt.Printf("Original data: %s\n", originalData)
+	fmt.Printf("Encrypted: %s\n", encrypted)
 
-	encrypted, err := encryptData(originalData, key)
+	decrypted, err := decrypt(encrypted, key)
 	if err != nil {
-		fmt.Printf("Encryption failed: %v\n", err)
-		os.Exit(1)
+		panic(err)
 	}
-	fmt.Printf("Encrypted data length: %d bytes\n", len(encrypted))
 
-	decrypted, err := decryptData(encrypted, key)
-	if err != nil {
-		fmt.Printf("Decryption failed: %v\n", err)
-		os.Exit(1)
-	}
-	fmt.Printf("Decrypted data: %s\n", decrypted)
-
-	if string(originalData) == string(decrypted) {
-		fmt.Println("Encryption/decryption successful")
-	} else {
-		fmt.Println("Encryption/decryption failed")
-	}
+	fmt.Printf("Decrypted: %s\n", string(decrypted))
 }
