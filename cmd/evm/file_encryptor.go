@@ -1,73 +1,77 @@
-
 package main
 
 import (
-    "crypto/aes"
-    "crypto/cipher"
-    "crypto/rand"
-    "encoding/base64"
-    "errors"
-    "fmt"
-    "io"
+	"crypto/aes"
+	"crypto/cipher"
+	"crypto/rand"
+	"encoding/base64"
+	"fmt"
+	"io"
 )
 
-func encrypt(key []byte, plaintext string) (string, error) {
-    block, err := aes.NewCipher(key)
-    if err != nil {
-        return "", err
-    }
+func encrypt(plaintext []byte, key []byte) (string, error) {
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		return "", err
+	}
 
-    ciphertext := make([]byte, aes.BlockSize+len(plaintext))
-    iv := ciphertext[:aes.BlockSize]
-    if _, err := io.ReadFull(rand.Reader, iv); err != nil {
-        return "", err
-    }
+	gcm, err := cipher.NewGCM(block)
+	if err != nil {
+		return "", err
+	}
 
-    stream := cipher.NewCFBEncrypter(block, iv)
-    stream.XORKeyStream(ciphertext[aes.BlockSize:], []byte(plaintext))
+	nonce := make([]byte, gcm.NonceSize())
+	if _, err = io.ReadFull(rand.Reader, nonce); err != nil {
+		return "", err
+	}
 
-    return base64.StdEncoding.EncodeToString(ciphertext), nil
+	ciphertext := gcm.Seal(nonce, nonce, plaintext, nil)
+	return base64.StdEncoding.EncodeToString(ciphertext), nil
 }
 
-func decrypt(key []byte, cryptoText string) (string, error) {
-    ciphertext, err := base64.StdEncoding.DecodeString(cryptoText)
-    if err != nil {
-        return "", err
-    }
+func decrypt(encodedCiphertext string, key []byte) ([]byte, error) {
+	ciphertext, err := base64.StdEncoding.DecodeString(encodedCiphertext)
+	if err != nil {
+		return nil, err
+	}
 
-    block, err := aes.NewCipher(key)
-    if err != nil {
-        return "", err
-    }
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		return nil, err
+	}
 
-    if len(ciphertext) < aes.BlockSize {
-        return "", errors.New("ciphertext too short")
-    }
+	gcm, err := cipher.NewGCM(block)
+	if err != nil {
+		return nil, err
+	}
 
-    iv := ciphertext[:aes.BlockSize]
-    ciphertext = ciphertext[aes.BlockSize:]
+	nonceSize := gcm.NonceSize()
+	if len(ciphertext) < nonceSize {
+		return nil, fmt.Errorf("ciphertext too short")
+	}
 
-    stream := cipher.NewCFBDecrypter(block, iv)
-    stream.XORKeyStream(ciphertext, ciphertext)
-
-    return string(ciphertext), nil
+	nonce, ciphertext := ciphertext[:nonceSize], ciphertext[nonceSize:]
+	return gcm.Open(nil, nonce, ciphertext, nil)
 }
 
 func main() {
-    key := []byte("32-byte-long-key-here-123456789")
-    original := "Sensitive data to protect"
+	key := make([]byte, 32)
+	if _, err := io.ReadFull(rand.Reader, key); err != nil {
+		panic(err)
+	}
 
-    encrypted, err := encrypt(key, original)
-    if err != nil {
-        fmt.Println("Encryption error:", err)
-        return
-    }
-    fmt.Println("Encrypted:", encrypted)
+	message := []byte("Sensitive data requiring encryption")
+	fmt.Printf("Original: %s\n", message)
 
-    decrypted, err := decrypt(key, encrypted)
-    if err != nil {
-        fmt.Println("Decryption error:", err)
-        return
-    }
-    fmt.Println("Decrypted:", decrypted)
+	encrypted, err := encrypt(message, key)
+	if err != nil {
+		panic(err)
+	}
+	fmt.Printf("Encrypted: %s\n", encrypted)
+
+	decrypted, err := decrypt(encrypted, key)
+	if err != nil {
+		panic(err)
+	}
+	fmt.Printf("Decrypted: %s\n", decrypted)
 }
