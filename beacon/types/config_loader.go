@@ -82,4 +82,47 @@ func overrideFromEnv(config *AppConfig) {
     if val := os.Getenv("LOG_LEVEL"); val != "" {
         config.LogLevel = val
     }
+}package config
+
+import (
+    "encoding/json"
+    "os"
+    "strings"
+)
+
+type Config struct {
+    ServerPort string `json:"server_port"`
+    DatabaseURL string `json:"database_url"`
+    DebugMode bool `json:"debug_mode"`
+    MaxConnections int `json:"max_connections"`
+}
+
+func LoadConfig(filename string) (*Config, error) {
+    file, err := os.Open(filename)
+    if err != nil {
+        return nil, err
+    }
+    defer file.Close()
+
+    var config Config
+    decoder := json.NewDecoder(file)
+    if err := decoder.Decode(&config); err != nil {
+        return nil, err
+    }
+
+    config.ServerPort = replaceEnvVars(config.ServerPort)
+    config.DatabaseURL = replaceEnvVars(config.DatabaseURL)
+
+    return &config, nil
+}
+
+func replaceEnvVars(value string) string {
+    return os.ExpandEnv(value)
+}
+
+func GetEnv(key, defaultValue string) string {
+    if value := os.Getenv(key); value != "" {
+        return value
+    }
+    return defaultValue
 }
