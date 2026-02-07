@@ -137,3 +137,103 @@ func main() {
 		}
 	}
 }
+package main
+
+import (
+	"encoding/csv"
+	"fmt"
+	"io"
+	"os"
+	"strings"
+)
+
+type DataRecord struct {
+	ID      string
+	Name    string
+	Value   string
+	IsValid bool
+}
+
+func ProcessCSVFile(filePath string) ([]DataRecord, error) {
+	file, err := os.Open(filePath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open file: %w", err)
+	}
+	defer file.Close()
+
+	reader := csv.NewReader(file)
+	reader.TrimLeadingSpace = true
+
+	var records []DataRecord
+	headerSkipped := false
+
+	for {
+		row, err := reader.Read()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return nil, fmt.Errorf("csv read error: %w", err)
+		}
+
+		if !headerSkipped {
+			headerSkipped = true
+			continue
+		}
+
+		if len(row) < 3 {
+			continue
+		}
+
+		record := DataRecord{
+			ID:    strings.TrimSpace(row[0]),
+			Name:  strings.TrimSpace(row[1]),
+			Value: strings.TrimSpace(row[2]),
+		}
+		record.IsValid = validateRecord(record)
+
+		records = append(records, record)
+	}
+
+	return records, nil
+}
+
+func validateRecord(record DataRecord) bool {
+	if record.ID == "" || record.Name == "" {
+		return false
+	}
+	if len(record.Value) > 100 {
+		return false
+	}
+	return true
+}
+
+func FilterValidRecords(records []DataRecord) []DataRecord {
+	var valid []DataRecord
+	for _, record := range records {
+		if record.IsValid {
+			valid = append(valid, record)
+		}
+	}
+	return valid
+}
+
+func main() {
+	if len(os.Args) < 2 {
+		fmt.Println("Usage: data_processor <csv_file>")
+		os.Exit(1)
+	}
+
+	records, err := ProcessCSVFile(os.Args[1])
+	if err != nil {
+		fmt.Printf("Error processing file: %v\n", err)
+		os.Exit(1)
+	}
+
+	validRecords := FilterValidRecords(records)
+	fmt.Printf("Total records: %d, Valid records: %d\n", len(records), len(validRecords))
+
+	for _, record := range validRecords {
+		fmt.Printf("ID: %s, Name: %s, Value: %s\n", record.ID, record.Name, record.Value)
+	}
+}
