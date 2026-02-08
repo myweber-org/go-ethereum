@@ -1,100 +1,56 @@
-package middleware
+package auth
 
 import (
-	"context"
-	"net/http"
-	"strings"
+    "errors"
+    "time"
+
+    "github.com/golang-jwt/jwt/v4"
 )
 
-type contextKey string
-
-const UserIDKey contextKey = "userID"
-
-func AuthMiddleware(jwtSecret string) func(http.Handler) http.Handler {
-	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			authHeader := r.Header.Get("Authorization")
-			if authHeader == "" {
-				http.Error(w, "Authorization header required", http.StatusUnauthorized)
-				return
-			}
-
-			parts := strings.Split(authHeader, " ")
-			if len(parts) != 2 || parts[0] != "Bearer" {
-				http.Error(w, "Invalid authorization format", http.StatusUnauthorized)
-				return
-			}
-
-			tokenString := parts[1]
-			userID, err := validateJWT(tokenString, jwtSecret)
-			if err != nil {
-				http.Error(w, "Invalid token", http.StatusUnauthorized)
-				return
-			}
-
-			ctx := context.WithValue(r.Context(), UserIDKey, userID)
-			next.ServeHTTP(w, r.WithContext(ctx))
-		})
-	}
-}
-
-func validateJWT(tokenString, secret string) (string, error) {
-	// Simplified JWT validation logic
-	// In production, use a proper JWT library like github.com/golang-jwt/jwt
-	if tokenString == "" || secret == "" {
-		return "", http.ErrNoCookie
-	}
-	
-	// Mock validation - replace with actual JWT parsing
-	if tokenString == "valid.token.here" {
-		return "user123", nil
-	}
-	return "", http.ErrNoCookie
-}package middleware
-
-import (
-	"context"
-	"net/http"
-	"strings"
+var (
+    ErrInvalidToken = errors.New("invalid token")
+    ErrExpiredToken = errors.New("token has expired")
+    secretKey       = []byte("your-secret-key-change-in-production")
 )
 
-type contextKey string
-
-const userIDKey contextKey = "userID"
-
-func Authenticate(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		authHeader := r.Header.Get("Authorization")
-		if authHeader == "" {
-			http.Error(w, "Authorization header required", http.StatusUnauthorized)
-			return
-		}
-
-		parts := strings.Split(authHeader, " ")
-		if len(parts) != 2 || parts[0] != "Bearer" {
-			http.Error(w, "Invalid authorization format", http.StatusUnauthorized)
-			return
-		}
-
-		token := parts[1]
-		userID, err := validateToken(token)
-		if err != nil {
-			http.Error(w, "Invalid token", http.StatusUnauthorized)
-			return
-		}
-
-		ctx := context.WithValue(r.Context(), userIDKey, userID)
-		next.ServeHTTP(w, r.WithContext(ctx))
-	})
+type Claims struct {
+    UserID string `json:"user_id"`
+    Email  string `json:"email"`
+    jwt.RegisteredClaims
 }
 
-func validateToken(token string) (string, error) {
-	return "sample-user-id", nil
+func GenerateToken(userID, email string) (string, error) {
+    expirationTime := time.Now().Add(24 * time.Hour)
+    claims := &Claims{
+        UserID: userID,
+        Email:  email,
+        RegisteredClaims: jwt.RegisteredClaims{
+            ExpiresAt: jwt.NewNumericDate(expirationTime),
+            IssuedAt:  jwt.NewNumericDate(time.Now()),
+            Issuer:    "myapp",
+        },
+    }
+
+    token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+    return token.SignedString(secretKey)
 }
 
-func GetUserID(ctx context.Context) string {
-	if val, ok := ctx.Value(userIDKey).(string); ok {
-		return val
-	}
-	return ""
+func ValidateToken(tokenString string) (*Claims, error) {
+    claims := &Claims{}
+    token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
+        return secretKey, nil
+    })
+
+    if err != nil {
+        if errors.Is(err, jwt.ErrTokenExpired) {
+            return nil, ErrExpiredToken
+        }
+        return nil, ErrInvalidToken
+    }
+
+    if !token.Valid {
+        return nil, ErrInvalidToken
+    }
+
+    return claims, nil
 }
