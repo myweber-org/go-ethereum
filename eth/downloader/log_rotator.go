@@ -131,3 +131,165 @@ func main() {
 		time.Sleep(10 * time.Millisecond)
 	}
 }
+package main
+
+import (
+    "compress/gzip"
+    "fmt"
+    "io"
+    "os"
+    "path/filepath"
+    "sync"
+    "time"
+)
+
+type Rotator struct {
+    mu          sync.Mutex
+    file        *os.File
+    basePath    string
+    maxSize     int64
+    rotateEvery time.Duration
+    lastRotate  time.Time
+    currentSize int64
+}
+
+func NewRotator(basePath string, maxSize int64, rotateEvery time.Duration) (*Rotator, error) {
+    if err := os.MkdirAll(filepath.Dir(basePath), 0755); err != nil {
+        return nil, err
+    }
+
+    file, err := os.OpenFile(basePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+    if err != nil {
+        return nil, err
+    }
+
+    info, err := file.Stat()
+    if err != nil {
+        file.Close()
+        return nil, err
+    }
+
+    return &Rotator{
+        file:        file,
+        basePath:    basePath,
+        maxSize:     maxSize,
+        rotateEvery: rotateEvery,
+        lastRotate:  time.Now(),
+        currentSize: info.Size(),
+    }, nil
+}
+
+func (r *Rotator) Write(p []byte) (int, error) {
+    r.mu.Lock()
+    defer r.mu.Unlock()
+
+    if err := r.maybeRotate(); err != nil {
+        return 0, err
+    }
+
+    n, err := r.file.Write(p)
+    if err == nil {
+        r.currentSize += int64(n)
+    }
+    return n, err
+}
+
+func (r *Rotator) maybeRotate() error {
+    now := time.Now()
+    shouldRotate := false
+
+    if r.currentSize >= r.maxSize {
+        shouldRotate = true
+    }
+
+    if now.Sub(r.lastRotate) >= r.rotateEvery {
+        shouldRotate = true
+    }
+
+    if !shouldRotate {
+        return nil
+    }
+
+    if err := r.rotate(now); err != nil {
+        return err
+    }
+
+    r.lastRotate = now
+    return nil
+}
+
+func (r *Rotator) rotate(timestamp time.Time) error {
+    if err := r.file.Close(); err != nil {
+        return err
+    }
+
+    archiveName := fmt.Sprintf("%s.%s.gz",
+        r.basePath,
+        timestamp.Format("20060102_150405"),
+    )
+
+    if err := compressFile(r.basePath, archiveName); err != nil {
+        return err
+    }
+
+    if err := os.Remove(r.basePath); err != nil && !os.IsNotExist(err) {
+        return err
+    }
+
+    file, err := os.OpenFile(r.basePath, os.O_CREATE|os.O_WRONLY, 0644)
+    if err != nil {
+        return err
+    }
+
+    r.file = file
+    r.currentSize = 0
+    return nil
+}
+
+func compressFile(src, dst string) error {
+    srcFile, err := os.Open(src)
+    if err != nil {
+        return err
+    }
+    defer srcFile.Close()
+
+    dstFile, err := os.Create(dst)
+    if err != nil {
+        return err
+    }
+    defer dstFile.Close()
+
+    gzWriter := gzip.NewWriter(dstFile)
+    defer gzWriter.Close()
+
+    if _, err := io.Copy(gzWriter, srcFile); err != nil {
+        return err
+    }
+    return nil
+}
+
+func (r *Rotator) Close() error {
+    r.mu.Lock()
+    defer r.mu.Unlock()
+    return r.file.Close()
+}
+
+func main() {
+    rotator, err := NewRotator(
+        "/var/log/myapp/app.log",
+        10*1024*1024,
+        24*time.Hour,
+    )
+    if err != nil {
+        panic(err)
+    }
+    defer rotator.Close()
+
+    for i := 0; i < 100; i++ {
+        msg := fmt.Sprintf("Log entry %d at %s\n", i, time.Now().Format(time.RFC3339))
+        if _, err := rotator.Write([]byte(msg)); err != nil {
+            fmt.Printf("Write error: %v\n", err)
+        }
+        time.Sleep(100 * time.Millisecond)
+    }
+}
