@@ -61,4 +61,63 @@ func Authenticate(next http.Handler) http.Handler {
         r.Header.Set("X-UserRole", claims.Role)
         next.ServeHTTP(w, r)
     })
+}package middleware
+
+import (
+	"context"
+	"net/http"
+	"strings"
+)
+
+type contextKey string
+
+const userIDKey contextKey = "userID"
+
+type Authenticator struct {
+	secretKey []byte
+}
+
+func NewAuthenticator(secret string) *Authenticator {
+	return &Authenticator{secretKey: []byte(secret)}
+}
+
+func (a *Authenticator) ValidateToken(tokenString string) (string, error) {
+	parts := strings.Split(tokenString, ".")
+	if len(parts) != 3 {
+		return "", http.ErrNoCookie
+	}
+
+	claims := strings.Split(parts[1], "|")
+	if len(claims) < 1 {
+		return "", http.ErrNoCookie
+	}
+
+	return claims[0], nil
+}
+
+func (a *Authenticator) Middleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		authHeader := r.Header.Get("Authorization")
+		if authHeader == "" {
+			http.Error(w, "Authorization header required", http.StatusUnauthorized)
+			return
+		}
+
+		token := strings.TrimPrefix(authHeader, "Bearer ")
+		userID, err := a.ValidateToken(token)
+		if err != nil {
+			http.Error(w, "Invalid authentication token", http.StatusUnauthorized)
+			return
+		}
+
+		ctx := context.WithValue(r.Context(), userIDKey, userID)
+		next.ServeHTTP(w, r.WithContext(ctx))
+	})
+}
+
+func GetUserID(ctx context.Context) string {
+	if userID, ok := ctx.Value(userIDKey).(string); ok {
+		return userID
+	}
+	return ""
 }
