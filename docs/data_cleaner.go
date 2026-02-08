@@ -2,56 +2,75 @@
 package main
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"strings"
 )
 
-type DataCleaner struct {
-	seen map[string]bool
+type Record struct {
+	ID    string
+	Email string
+	Phone string
+	Valid bool
 }
 
-func NewDataCleaner() *DataCleaner {
-	return &DataCleaner{
-		seen: make(map[string]bool),
-	}
-}
+func deduplicateByHash(records []Record) []Record {
+	seen := make(map[string]bool)
+	var unique []Record
 
-func (dc *DataCleaner) RemoveDuplicates(items []string) []string {
-	var unique []string
-	for _, item := range items {
-		normalized := strings.ToLower(strings.TrimSpace(item))
-		if !dc.seen[normalized] {
-			dc.seen[normalized] = true
-			unique = append(unique, item)
+	for _, r := range records {
+		hash := generateRecordHash(r)
+		if !seen[hash] {
+			seen[hash] = true
+			unique = append(unique, r)
 		}
 	}
 	return unique
 }
 
-func (dc *DataCleaner) ValidateEmail(email string) bool {
-	if !strings.Contains(email, "@") {
-		return false
+func generateRecordHash(r Record) string {
+	data := fmt.Sprintf("%s-%s-%s", r.ID, strings.ToLower(r.Email), r.Phone)
+	hash := sha256.Sum256([]byte(data))
+	return hex.EncodeToString(hash[:])
+}
+
+func validateRecords(records []Record) []Record {
+	var valid []Record
+	for _, r := range records {
+		if isValidEmail(r.Email) && isValidPhone(r.Phone) {
+			r.Valid = true
+			valid = append(valid, r)
+		}
 	}
-	parts := strings.Split(email, "@")
-	if len(parts) != 2 {
-		return false
-	}
-	return len(parts[0]) > 0 && len(parts[1]) > 0 && strings.Contains(parts[1], ".")
+	return valid
+}
+
+func isValidEmail(email string) bool {
+	return strings.Contains(email, "@") && strings.Contains(email, ".")
+}
+
+func isValidPhone(phone string) bool {
+	return len(phone) >= 10 && len(phone) <= 15
+}
+
+func processDataPipeline(records []Record) []Record {
+	cleaned := deduplicateByHash(records)
+	validated := validateRecords(cleaned)
+	return validated
 }
 
 func main() {
-	cleaner := NewDataCleaner()
-	
-	data := []string{"test@example.com", "  TEST@example.com  ", "invalid", "another@test.org"}
-	
-	uniqueData := cleaner.RemoveDuplicates(data)
-	fmt.Println("Unique items:", uniqueData)
-	
-	for _, email := range uniqueData {
-		if cleaner.ValidateEmail(email) {
-			fmt.Printf("Valid email: %s\n", email)
-		} else {
-			fmt.Printf("Invalid email: %s\n", email)
-		}
+	sampleData := []Record{
+		{"001", "user@example.com", "1234567890", false},
+		{"002", "user@example.com", "1234567890", false},
+		{"003", "invalid-email", "0987654321", false},
+		{"004", "another@test.org", "5551234567", false},
+	}
+
+	result := processDataPipeline(sampleData)
+	fmt.Printf("Processed %d records, %d valid unique records found\n", len(sampleData), len(result))
+	for _, r := range result {
+		fmt.Printf("Valid record: ID=%s, Email=%s\n", r.ID, r.Email)
 	}
 }
