@@ -65,4 +65,26 @@ func main() {
 	for _, phone := range phoneNumbers {
 		fmt.Printf("Cleaned phone: %s\n", cleaner.CleanPhoneNumber(phone))
 	}
+}package main
+
+import "fmt"
+
+func removeDuplicates(nums []int) []int {
+	seen := make(map[int]bool)
+	result := []int{}
+
+	for _, num := range nums {
+		if !seen[num] {
+			seen[num] = true
+			result = append(result, num)
+		}
+	}
+	return result
+}
+
+func main() {
+	input := []int{4, 2, 7, 2, 4, 9, 7}
+	output := removeDuplicates(input)
+	fmt.Println("Original:", input)
+	fmt.Println("Deduplicated:", output)
 }
