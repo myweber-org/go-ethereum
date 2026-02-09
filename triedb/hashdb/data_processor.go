@@ -98,3 +98,62 @@ func CalculateStatistics(records []DataRecord) (float64, float64) {
     average := sum / float64(len(records))
     return average, max
 }
+package main
+
+import (
+	"errors"
+	"strings"
+)
+
+type UserData struct {
+	ID    int
+	Name  string
+	Email string
+	Age   int
+}
+
+func ValidateUserData(data UserData) error {
+	if data.ID <= 0 {
+		return errors.New("invalid user ID")
+	}
+
+	data.Name = strings.TrimSpace(data.Name)
+	if data.Name == "" {
+		return errors.New("name cannot be empty")
+	}
+
+	data.Email = strings.TrimSpace(data.Email)
+	if !strings.Contains(data.Email, "@") {
+		return errors.New("invalid email format")
+	}
+
+	if data.Age < 0 || data.Age > 150 {
+		return errors.New("age must be between 0 and 150")
+	}
+
+	return nil
+}
+
+func TransformUserName(name string) string {
+	name = strings.TrimSpace(name)
+	if len(name) == 0 {
+		return "Anonymous"
+	}
+	return strings.Title(strings.ToLower(name))
+}
+
+func ProcessUserInput(rawName string, rawEmail string, rawAge int) (UserData, error) {
+	transformedName := TransformUserName(rawName)
+
+	user := UserData{
+		Name:  transformedName,
+		Email: strings.ToLower(strings.TrimSpace(rawEmail)),
+		Age:   rawAge,
+	}
+
+	if err := ValidateUserData(user); err != nil {
+		return UserData{}, err
+	}
+
+	return user, nil
+}
