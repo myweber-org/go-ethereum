@@ -120,4 +120,40 @@ func main() {
 	}
 
 	GenerateReport(records)
+}package data_processor
+
+import (
+	"regexp"
+	"strings"
+)
+
+type Processor struct {
+	whitespaceRegex *regexp.Regexp
+}
+
+func NewProcessor() *Processor {
+	return &Processor{
+		whitespaceRegex: regexp.MustCompile(`\s+`),
+	}
+}
+
+func (p *Processor) CleanInput(input string) string {
+	trimmed := strings.TrimSpace(input)
+	normalized := p.whitespaceRegex.ReplaceAllString(trimmed, " ")
+	return normalized
+}
+
+func (p *Processor) Tokenize(input string) []string {
+	cleaned := p.CleanInput(input)
+	if cleaned == "" {
+		return []string{}
+	}
+	return strings.Split(cleaned, " ")
+}
+
+func (p *Processor) NormalizeCase(input string, lower bool) string {
+	if lower {
+		return strings.ToLower(input)
+	}
+	return strings.ToUpper(input)
 }
