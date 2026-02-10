@@ -20,4 +20,26 @@ func main() {
 	cleaned := RemoveDuplicates(data)
 	fmt.Println("Original:", data)
 	fmt.Println("Cleaned:", cleaned)
+}package utils
+
+import (
+	"regexp"
+	"strings"
+	"unicode"
+)
+
+func SanitizeInput(input string) string {
+	trimmed := strings.TrimSpace(input)
+	
+	re := regexp.MustCompile(`\s+`)
+	trimmed = re.ReplaceAllString(trimmed, " ")
+	
+	var result strings.Builder
+	for _, r := range trimmed {
+		if unicode.IsPrint(r) && !unicode.IsControl(r) {
+			result.WriteRune(r)
+		}
+	}
+	
+	return result.String()
 }
