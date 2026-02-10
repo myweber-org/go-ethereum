@@ -1,44 +1,55 @@
-package middleware
+package auth
 
 import (
-	"net/http"
-	"strings"
+    "errors"
+    "time"
+
+    "github.com/golang-jwt/jwt/v5"
 )
 
-type Authenticator struct {
-	secretKey string
+var (
+    ErrInvalidToken = errors.New("invalid token")
+    secretKey       = []byte("your-secret-key-change-in-production")
+)
+
+type Claims struct {
+    UserID string `json:"user_id"`
+    Email  string `json:"email"`
+    jwt.RegisteredClaims
 }
 
-func NewAuthenticator(secretKey string) *Authenticator {
-	return &Authenticator{secretKey: secretKey}
+func GenerateToken(userID, email string) (string, error) {
+    expirationTime := time.Now().Add(24 * time.Hour)
+    
+    claims := &Claims{
+        UserID: userID,
+        Email:  email,
+        RegisteredClaims: jwt.RegisteredClaims{
+            ExpiresAt: jwt.NewNumericDate(expirationTime),
+            IssuedAt:  jwt.NewNumericDate(time.Now()),
+            Issuer:    "myapp",
+        },
+    }
+
+    token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+    return token.SignedString(secretKey)
 }
 
-func (a *Authenticator) ValidateToken(token string) bool {
-	if len(token) == 0 {
-		return false
-	}
-	return strings.HasPrefix(token, "valid_")
-}
+func ValidateToken(tokenString string) (*Claims, error) {
+    token, err := jwt.ParseWithClaims(tokenString, &Claims{}, func(token *jwt.Token) (interface{}, error) {
+        if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+            return nil, ErrInvalidToken
+        }
+        return secretKey, nil
+    })
 
-func (a *Authenticator) Middleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		authHeader := r.Header.Get("Authorization")
-		if authHeader == "" {
-			http.Error(w, "Missing authorization header", http.StatusUnauthorized)
-			return
-		}
+    if err != nil {
+        return nil, err
+    }
 
-		tokenParts := strings.Split(authHeader, " ")
-		if len(tokenParts) != 2 || tokenParts[0] != "Bearer" {
-			http.Error(w, "Invalid authorization format", http.StatusUnauthorized)
-			return
-		}
+    if claims, ok := token.Claims.(*Claims); ok && token.Valid {
+        return claims, nil
+    }
 
-		if !a.ValidateToken(tokenParts[1]) {
-			http.Error(w, "Invalid token", http.StatusForbidden)
-			return
-		}
-
-		next.ServeHTTP(w, r)
-	})
+    return nil, ErrInvalidToken
 }
