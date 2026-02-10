@@ -78,3 +78,14 @@ func ValidateRecords(records []DataRecord) error {
 	}
 	return nil
 }
+package data
+
+func FilterAndTransform(nums []int, predicate func(int) bool, transform func(int) int) []int {
+    var result []int
+    for _, n := range nums {
+        if predicate(n) {
+            result = append(result, transform(n))
+        }
+    }
+    return result
+}
