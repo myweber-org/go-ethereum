@@ -140,3 +140,67 @@ func getStringSlice(key string, defaultValue []string) []string {
 	}
 	return defaultValue
 }
+package config
+
+import (
+	"errors"
+	"os"
+	"strconv"
+	"strings"
+)
+
+type Config struct {
+	ServerPort int
+	DBHost     string
+	DBPort     int
+	DebugMode  bool
+	APIKeys    []string
+}
+
+func LoadConfig() (*Config, error) {
+	cfg := &Config{}
+
+	portStr := os.Getenv("SERVER_PORT")
+	if portStr == "" {
+		portStr = "8080"
+	}
+	port, err := strconv.Atoi(portStr)
+	if err != nil {
+		return nil, errors.New("invalid SERVER_PORT value")
+	}
+	if port < 1 || port > 65535 {
+		return nil, errors.New("SERVER_PORT out of valid range")
+	}
+	cfg.ServerPort = port
+
+	cfg.DBHost = os.Getenv("DB_HOST")
+	if cfg.DBHost == "" {
+		cfg.DBHost = "localhost"
+	}
+
+	dbPortStr := os.Getenv("DB_PORT")
+	if dbPortStr == "" {
+		dbPortStr = "5432"
+	}
+	dbPort, err := strconv.Atoi(dbPortStr)
+	if err != nil {
+		return nil, errors.New("invalid DB_PORT value")
+	}
+	if dbPort < 1 || dbPort > 65535 {
+		return nil, errors.New("DB_PORT out of valid range")
+	}
+	cfg.DBPort = dbPort
+
+	debugStr := os.Getenv("DEBUG_MODE")
+	cfg.DebugMode = strings.ToLower(debugStr) == "true"
+
+	keysStr := os.Getenv("API_KEYS")
+	if keysStr != "" {
+		cfg.APIKeys = strings.Split(keysStr, ",")
+		for i, key := range cfg.APIKeys {
+			cfg.APIKeys[i] = strings.TrimSpace(key)
+		}
+	}
+
+	return cfg, nil
+}
