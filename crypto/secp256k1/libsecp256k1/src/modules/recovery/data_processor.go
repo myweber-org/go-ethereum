@@ -113,4 +113,49 @@ func main() {
 	}
 
 	GenerateReport(records)
+}package main
+
+import (
+	"encoding/json"
+	"errors"
+	"fmt"
+)
+
+type UserData struct {
+	ID    int    `json:"id"`
+	Name  string `json:"name"`
+	Email string `json:"email"`
+}
+
+func ParseAndValidateJSON(rawData []byte) (*UserData, error) {
+	if len(rawData) == 0 {
+		return nil, errors.New("empty input data")
+	}
+
+	var user UserData
+	if err := json.Unmarshal(rawData, &user); err != nil {
+		return nil, fmt.Errorf("json unmarshal failed: %w", err)
+	}
+
+	if user.ID <= 0 {
+		return nil, errors.New("invalid user ID")
+	}
+	if user.Name == "" {
+		return nil, errors.New("name cannot be empty")
+	}
+	if user.Email == "" {
+		return nil, errors.New("email cannot be empty")
+	}
+
+	return &user, nil
+}
+
+func main() {
+	validJSON := []byte(`{"id": 123, "name": "John Doe", "email": "john@example.com"}`)
+	user, err := ParseAndValidateJSON(validJSON)
+	if err != nil {
+		fmt.Printf("Error: %v\n", err)
+		return
+	}
+	fmt.Printf("Parsed user: %+v\n", user)
 }
