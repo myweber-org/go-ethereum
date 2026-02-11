@@ -3,44 +3,21 @@ package main
 
 import "fmt"
 
-func RemoveDuplicates(input []int) []int {
-	seen := make(map[int]bool)
-	result := []int{}
-
-	for _, value := range input {
-		if !seen[value] {
-			seen[value] = true
-			result = append(result, value)
-		}
-	}
-	return result
-}
-
-func main() {
-	data := []int{1, 2, 2, 3, 4, 4, 5, 1, 6}
-	cleaned := RemoveDuplicates(data)
-	fmt.Println("Original:", data)
-	fmt.Println("Cleaned:", cleaned)
-}
-package main
-
-import "fmt"
-
-func FilterUniqueStrings(input []string) []string {
-    seen := make(map[string]struct{})
-    var result []string
-
-    for _, item := range input {
-        if _, exists := seen[item]; !exists {
-            seen[item] = struct{}{}
-            result = append(result, item)
+func RemoveDuplicates(nums []int) []int {
+    seen := make(map[int]bool)
+    result := []int{}
+    for _, num := range nums {
+        if !seen[num] {
+            seen[num] = true
+            result = append(result, num)
         }
     }
     return result
 }
 
 func main() {
-    sample := []string{"apple", "banana", "apple", "cherry", "banana"}
-    unique := FilterUniqueStrings(sample)
-    fmt.Println(unique)
+    data := []int{1, 2, 2, 3, 4, 4, 5, 6, 6, 7}
+    cleaned := RemoveDuplicates(data)
+    fmt.Printf("Original: %v\n", data)
+    fmt.Printf("Cleaned: %v\n", cleaned)
 }
