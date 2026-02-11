@@ -113,3 +113,76 @@ func main() {
 	avg, min, max := CalculateStatistics(records)
 	fmt.Printf("Statistics - Average: %.2f, Min: %.2f, Max: %.2f\n", avg, min, max)
 }
+package main
+
+import (
+	"errors"
+	"regexp"
+	"strings"
+	"time"
+)
+
+type UserProfile struct {
+	ID        int
+	Username  string
+	Email     string
+	BirthDate time.Time
+	Active    bool
+}
+
+var emailRegex = regexp.MustCompile(`^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$`)
+
+func ValidateUserProfile(profile UserProfile) error {
+	if profile.ID <= 0 {
+		return errors.New("invalid user ID")
+	}
+
+	if strings.TrimSpace(profile.Username) == "" {
+		return errors.New("username cannot be empty")
+	}
+
+	if len(profile.Username) < 3 || len(profile.Username) > 50 {
+		return errors.New("username must be between 3 and 50 characters")
+	}
+
+	if !emailRegex.MatchString(profile.Email) {
+		return errors.New("invalid email format")
+	}
+
+	if profile.BirthDate.After(time.Now()) {
+		return errors.New("birth date cannot be in the future")
+	}
+
+	minDate := time.Date(1900, 1, 1, 0, 0, 0, 0, time.UTC)
+	if profile.BirthDate.Before(minDate) {
+		return errors.New("birth date is too far in the past")
+	}
+
+	return nil
+}
+
+func TransformUsername(username string) string {
+	username = strings.TrimSpace(username)
+	username = strings.ToLower(username)
+	return strings.ReplaceAll(username, " ", "_")
+}
+
+func CalculateAge(birthDate time.Time) int {
+	now := time.Now()
+	years := now.Year() - birthDate.Year()
+
+	if now.YearDay() < birthDate.YearDay() {
+		years--
+	}
+
+	return years
+}
+
+func ProcessUserProfile(profile UserProfile) (UserProfile, error) {
+	if err := ValidateUserProfile(profile); err != nil {
+		return profile, err
+	}
+
+	profile.Username = TransformUsername(profile.Username)
+	return profile, nil
+}
