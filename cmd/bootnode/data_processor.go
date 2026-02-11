@@ -1,122 +1,58 @@
 
-package main
+package data_processor
 
 import (
-	"errors"
+	"encoding/json"
 	"fmt"
-	"strings"
 )
 
-type DataRecord struct {
-	ID    int
-	Name  string
-	Value float64
-	Valid bool
+type ValidationError struct {
+	Field   string `json:"field"`
+	Message string `json:"message"`
 }
 
-type Validator interface {
-	Validate(DataRecord) error
+func (e ValidationError) Error() string {
+	return fmt.Sprintf("validation error on field '%s': %s", e.Field, e.Message)
 }
 
-type Transformer interface {
-	Transform(DataRecord) DataRecord
+type UserData struct {
+	ID       int    `json:"id"`
+	Username string `json:"username"`
+	Email    string `json:"email"`
+	Active   bool   `json:"active"`
 }
 
-type LengthValidator struct {
-	MinLength int
-}
-
-func (v LengthValidator) Validate(record DataRecord) error {
-	if len(record.Name) < v.MinLength {
-		return errors.New("name too short")
+func ParseAndValidateUser(jsonData []byte) (*UserData, error) {
+	var user UserData
+	
+	if err := json.Unmarshal(jsonData, &user); err != nil {
+		return nil, fmt.Errorf("failed to parse JSON: %w", err)
 	}
-	return nil
-}
-
-type ValueValidator struct {
-	MinValue float64
-	MaxValue float64
-}
-
-func (v ValueValidator) Validate(record DataRecord) error {
-	if record.Value < v.MinValue || record.Value > v.MaxValue {
-		return errors.New("value out of range")
+	
+	if user.ID <= 0 {
+		return nil, ValidationError{Field: "id", Message: "must be positive integer"}
 	}
-	return nil
-}
-
-type UppercaseTransformer struct{}
-
-func (t UppercaseTransformer) Transform(record DataRecord) DataRecord {
-	record.Name = strings.ToUpper(record.Name)
-	return record
-}
-
-type MultiplierTransformer struct {
-	Factor float64
-}
-
-func (t MultiplierTransformer) Transform(record DataRecord) DataRecord {
-	record.Value = record.Value * t.Factor
-	return record
-}
-
-type ProcessingPipeline struct {
-	validators   []Validator
-	transformers []Transformer
-}
-
-func NewProcessingPipeline() *ProcessingPipeline {
-	return &ProcessingPipeline{
-		validators:   make([]Validator, 0),
-		transformers: make([]Transformer, 0),
+	
+	if user.Username == "" {
+		return nil, ValidationError{Field: "username", Message: "cannot be empty"}
 	}
+	
+	if !isValidEmail(user.Email) {
+		return nil, ValidationError{Field: "email", Message: "invalid email format"}
+	}
+	
+	return &user, nil
 }
 
-func (p *ProcessingPipeline) AddValidator(v Validator) {
-	p.validators = append(p.validators, v)
-}
-
-func (p *ProcessingPipeline) AddTransformer(t Transformer) {
-	p.transformers = append(p.transformers, t)
-}
-
-func (p *ProcessingPipeline) Process(record DataRecord) (DataRecord, error) {
-	for _, validator := range p.validators {
-		if err := validator.Validate(record); err != nil {
-			record.Valid = false
-			return record, fmt.Errorf("validation failed: %w", err)
+func isValidEmail(email string) bool {
+	if email == "" {
+		return false
+	}
+	
+	for i, c := range email {
+		if c == '@' && i > 0 && i < len(email)-1 {
+			return true
 		}
 	}
-
-	processedRecord := record
-	for _, transformer := range p.transformers {
-		processedRecord = transformer.Transform(processedRecord)
-	}
-
-	processedRecord.Valid = true
-	return processedRecord, nil
-}
-
-func main() {
-	pipeline := NewProcessingPipeline()
-	pipeline.AddValidator(LengthValidator{MinLength: 3})
-	pipeline.AddValidator(ValueValidator{MinValue: 0, MaxValue: 100})
-	pipeline.AddTransformer(UppercaseTransformer{})
-	pipeline.AddTransformer(MultiplierTransformer{Factor: 1.5})
-
-	records := []DataRecord{
-		{ID: 1, Name: "test", Value: 50.0},
-		{ID: 2, Name: "ab", Value: 75.0},
-		{ID: 3, Name: "sample", Value: 150.0},
-	}
-
-	for _, record := range records {
-		result, err := pipeline.Process(record)
-		if err != nil {
-			fmt.Printf("Record %d processing failed: %v\n", record.ID, err)
-		} else {
-			fmt.Printf("Processed Record %d: %+v\n", result.ID, result)
-		}
-	}
+	return false
 }
