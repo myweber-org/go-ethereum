@@ -94,3 +94,48 @@ func main() {
 	}
 	fmt.Printf("Processed: %+v\n", processedData)
 }
+package main
+
+import (
+	"errors"
+	"strings"
+	"time"
+)
+
+type DataRecord struct {
+	ID        string
+	Value     string
+	Timestamp time.Time
+	Valid     bool
+}
+
+func ValidateRecord(record DataRecord) error {
+	if record.ID == "" {
+		return errors.New("record ID cannot be empty")
+	}
+	if len(record.Value) > 1000 {
+		return errors.New("record value exceeds maximum length")
+	}
+	if record.Timestamp.After(time.Now()) {
+		return errors.New("record timestamp cannot be in the future")
+	}
+	return nil
+}
+
+func TransformRecord(record DataRecord) DataRecord {
+	transformed := record
+	transformed.Value = strings.ToUpper(strings.TrimSpace(record.Value))
+	transformed.Valid = ValidateRecord(record) == nil
+	return transformed
+}
+
+func ProcessRecords(records []DataRecord) ([]DataRecord, error) {
+	var processed []DataRecord
+	for _, record := range records {
+		if err := ValidateRecord(record); err != nil {
+			return nil, err
+		}
+		processed = append(processed, TransformRecord(record))
+	}
+	return processed, nil
+}
