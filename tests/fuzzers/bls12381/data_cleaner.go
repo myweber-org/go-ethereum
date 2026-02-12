@@ -59,4 +59,24 @@ func main() {
 	testValue := "  TEST  "
 	normalized := cleaner.Normalize(testValue)
 	fmt.Printf("Normalized '%s' to '%s'\n", testValue, normalized)
+}package utils
+
+import (
+	"regexp"
+	"strings"
+)
+
+func SanitizeString(input string) string {
+	// Remove leading and trailing whitespace
+	trimmed := strings.TrimSpace(input)
+	
+	// Replace multiple spaces with single space
+	re := regexp.MustCompile(`\s+`)
+	cleaned := re.ReplaceAllString(trimmed, " ")
+	
+	return cleaned
+}
+
+func NormalizeWhitespace(input string) string {
+	return SanitizeString(input)
 }
