@@ -273,3 +273,72 @@ func main() {
 	fmt.Printf("Active Records: %d\n", activeCount)
 	fmt.Printf("Total Records: %d\n", len(records))
 }
+package main
+
+import (
+    "errors"
+    "regexp"
+    "strings"
+)
+
+type UserProfile struct {
+    ID        string
+    Email     string
+    Username  string
+    Age       int
+    IsActive  bool
+}
+
+func ValidateEmail(email string) error {
+    pattern := `^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$`
+    matched, err := regexp.MatchString(pattern, email)
+    if err != nil {
+        return err
+    }
+    if !matched {
+        return errors.New("invalid email format")
+    }
+    return nil
+}
+
+func NormalizeUsername(username string) string {
+    return strings.ToLower(strings.TrimSpace(username))
+}
+
+func TransformUserProfile(profile UserProfile) (UserProfile, error) {
+    if err := ValidateEmail(profile.Email); err != nil {
+        return profile, err
+    }
+
+    normalizedUsername := NormalizeUsername(profile.Username)
+
+    transformed := UserProfile{
+        ID:        strings.ToUpper(profile.ID),
+        Email:     strings.ToLower(profile.Email),
+        Username:  normalizedUsername,
+        Age:       profile.Age,
+        IsActive:  profile.IsActive,
+    }
+
+    if transformed.Age < 0 {
+        return transformed, errors.New("age cannot be negative")
+    }
+
+    return transformed, nil
+}
+
+func ProcessUserBatch(profiles []UserProfile) ([]UserProfile, []error) {
+    var processed []UserProfile
+    var errs []error
+
+    for i, profile := range profiles {
+        transformed, err := TransformUserProfile(profile)
+        if err != nil {
+            errs = append(errs, errors.New("profile index "+string(rune(i))+": "+err.Error()))
+            continue
+        }
+        processed = append(processed, transformed)
+    }
+
+    return processed, errs
+}
