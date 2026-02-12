@@ -67,3 +67,42 @@ func main() {
 	ctx := context.Background()
 	cleaner.Run(ctx, time.Hour)
 }
+package main
+
+import (
+    "context"
+    "log"
+    "time"
+
+    "yourproject/internal/database"
+    "yourproject/internal/models"
+)
+
+func main() {
+    ctx := context.Background()
+    db, err := database.NewConnection()
+    if err != nil {
+        log.Fatalf("Failed to connect to database: %v", err)
+    }
+    defer db.Close()
+
+    for {
+        cleanupExpiredSessions(ctx, db)
+        time.Sleep(24 * time.Hour)
+    }
+}
+
+func cleanupExpiredSessions(ctx context.Context, db *database.DB) {
+    result := db.WithContext(ctx).
+        Where("expires_at < ?", time.Now()).
+        Delete(&models.Session{})
+    
+    if result.Error != nil {
+        log.Printf("Error cleaning up sessions: %v", result.Error)
+        return
+    }
+    
+    if result.RowsAffected > 0 {
+        log.Printf("Cleaned up %d expired sessions", result.RowsAffected)
+    }
+}
