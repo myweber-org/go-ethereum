@@ -147,4 +147,74 @@ func getBoolEnv(key string, defaultValue bool) bool {
 		return boolValue
 	}
 	return defaultValue
+}package config
+
+import (
+	"os"
+	"path/filepath"
+
+	"gopkg.in/yaml.v3"
+)
+
+type Config struct {
+	Server struct {
+		Host string `yaml:"host"`
+		Port int    `yaml:"port"`
+	} `yaml:"server"`
+	Database struct {
+		Host     string `yaml:"host"`
+		Port     int    `yaml:"port"`
+		Username string `yaml:"username"`
+		Password string `yaml:"password"`
+		Name     string `yaml:"name"`
+	} `yaml:"database"`
+	Logging struct {
+		Level  string `yaml:"level"`
+		Output string `yaml:"output"`
+	} `yaml:"logging"`
+}
+
+func LoadConfig(configPath string) (*Config, error) {
+	absPath, err := filepath.Abs(configPath)
+	if err != nil {
+		return nil, err
+	}
+
+	data, err := os.ReadFile(absPath)
+	if err != nil {
+		return nil, err
+	}
+
+	var cfg Config
+	if err := yaml.Unmarshal(data, &cfg); err != nil {
+		return nil, err
+	}
+
+	overrideFromEnv(&cfg)
+	return &cfg, nil
+}
+
+func overrideFromEnv(cfg *Config) {
+	if host := os.Getenv("DB_HOST"); host != "" {
+		cfg.Database.Host = host
+	}
+	if port := os.Getenv("DB_PORT"); port != "" {
+		cfg.Database.Port = atoi(port)
+	}
+	if user := os.Getenv("DB_USER"); user != "" {
+		cfg.Database.Username = user
+	}
+	if pass := os.Getenv("DB_PASS"); pass != "" {
+		cfg.Database.Password = pass
+	}
+}
+
+func atoi(s string) int {
+	var result int
+	for _, ch := range s {
+		if ch >= '0' && ch <= '9' {
+			result = result*10 + int(ch-'0')
+		}
+	}
+	return result
 }
