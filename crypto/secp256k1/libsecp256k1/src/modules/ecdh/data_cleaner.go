@@ -1,43 +1,24 @@
-package datautils
 
-import (
-	"regexp"
-	"strings"
-	"unicode"
-)
+package main
 
-// SanitizeString removes potentially harmful characters and normalizes whitespace
-func SanitizeString(input string) string {
-	if input == "" {
-		return input
-	}
+import "fmt"
 
-	// Remove null characters and control characters except common whitespace
-	cleaned := strings.Map(func(r rune) rune {
-		if r == 0 || (unicode.IsControl(r) && r != '\n' && r != '\t' && r != '\r') {
-			return -1
+func RemoveDuplicates(input []int) []int {
+	seen := make(map[int]bool)
+	result := []int{}
+
+	for _, value := range input {
+		if !seen[value] {
+			seen[value] = true
+			result = append(result, value)
 		}
-		return r
-	}, input)
-
-	// Normalize multiple spaces/tabs to single space
-	spaceRegex := regexp.MustCompile(`\s+`)
-	cleaned = spaceRegex.ReplaceAllString(cleaned, " ")
-
-	// Trim leading/trailing whitespace
-	cleaned = strings.TrimSpace(cleaned)
-
-	return cleaned
+	}
+	return result
 }
 
-// NormalizeWhitespace converts all whitespace variations to standard spaces
-func NormalizeWhitespace(input string) string {
-	whitespaceRegex := regexp.MustCompile(`[\s\p{Z}]+`)
-	return whitespaceRegex.ReplaceAllString(input, " ")
-}
-
-// IsSafeForDatabase checks if string contains only safe characters
-func IsSafeForDatabase(input string) bool {
-	safeRegex := regexp.MustCompile(`^[\p{L}\p{N}\p{P}\p{Z}]+$`)
-	return safeRegex.MatchString(input)
+func main() {
+	data := []int{1, 2, 2, 3, 4, 4, 5, 1, 6}
+	cleaned := RemoveDuplicates(data)
+	fmt.Println("Original:", data)
+	fmt.Println("Cleaned:", cleaned)
 }
