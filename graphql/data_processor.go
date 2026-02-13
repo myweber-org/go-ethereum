@@ -93,4 +93,49 @@ func main() {
 	}
 	
 	fmt.Printf("Processed results: %v\n", results)
+}package main
+
+import (
+	"encoding/json"
+	"fmt"
+	"regexp"
+	"strings"
+)
+
+func ValidateEmail(email string) bool {
+	pattern := `^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$`
+	matched, _ := regexp.MatchString(pattern, email)
+	return matched
+}
+
+func TransformKeysToLower(data map[string]interface{}) map[string]interface{} {
+	result := make(map[string]interface{})
+	for key, value := range data {
+		lowerKey := strings.ToLower(key)
+		result[lowerKey] = value
+	}
+	return result
+}
+
+func PrettyPrintJSON(data interface{}) (string, error) {
+	bytes, err := json.MarshalIndent(data, "", "  ")
+	if err != nil {
+		return "", err
+	}
+	return string(bytes), nil
+}
+
+func main() {
+	email := "test@example.com"
+	fmt.Printf("Email %s valid: %v\n", email, ValidateEmail(email))
+
+	sampleData := map[string]interface{}{
+		"Name":  "John Doe",
+		"Age":   30,
+		"Email": "john@example.com",
+	}
+	transformed := TransformKeysToLower(sampleData)
+	prettyJSON, _ := PrettyPrintJSON(transformed)
+	fmt.Println("Transformed data:")
+	fmt.Println(prettyJSON)
 }
