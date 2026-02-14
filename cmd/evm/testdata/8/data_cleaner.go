@@ -1,10 +1,11 @@
+
 package main
 
 import (
 	"encoding/csv"
 	"fmt"
+	"io"
 	"os"
-	"strings"
 )
 
 func removeDuplicates(inputFile, outputFile string) error {
@@ -24,7 +25,13 @@ func removeDuplicates(inputFile, outputFile string) error {
 	var uniqueRecords [][]string
 
 	for _, record := range records {
-		key := strings.Join(record, "|")
+		if len(record) == 0 {
+			continue
+		}
+		key := record[0]
+		for i := 1; i < len(record); i++ {
+			key += "," + record[i]
+		}
 		if !seen[key] {
 			seen[key] = true
 			uniqueRecords = append(uniqueRecords, record)
