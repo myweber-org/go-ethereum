@@ -240,3 +240,42 @@ func CalculateAverage(records []DataRecord) float64 {
 
 	return total / float64(len(records))
 }
+package main
+
+import (
+	"errors"
+	"regexp"
+	"strings"
+)
+
+type UserProfile struct {
+	Email    string
+	Username string
+	Age      int
+}
+
+func ValidateEmail(email string) error {
+	re := regexp.MustCompile(`^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$`)
+	if !re.MatchString(email) {
+		return errors.New("invalid email format")
+	}
+	return nil
+}
+
+func SanitizeUsername(username string) string {
+	return strings.TrimSpace(username)
+}
+
+func TransformProfile(profile UserProfile) (UserProfile, error) {
+	if err := ValidateEmail(profile.Email); err != nil {
+		return UserProfile{}, err
+	}
+
+	profile.Username = SanitizeUsername(profile.Username)
+
+	if profile.Age < 0 || profile.Age > 150 {
+		return UserProfile{}, errors.New("age out of valid range")
+	}
+
+	return profile, nil
+}
