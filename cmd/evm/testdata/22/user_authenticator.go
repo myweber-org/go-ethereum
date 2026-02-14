@@ -1,4 +1,4 @@
-package auth
+package middleware
 
 import (
 	"context"
@@ -10,17 +10,7 @@ type contextKey string
 
 const userIDKey contextKey = "userID"
 
-type Authenticator struct {
-	secretKey []byte
-}
-
-func NewAuthenticator(secretKey string) *Authenticator {
-	return &Authenticator{
-		secretKey: []byte(secretKey),
-	}
-}
-
-func (a *Authenticator) Middleware(next http.Handler) http.Handler {
+func Authenticate(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		authHeader := r.Header.Get("Authorization")
 		if authHeader == "" {
@@ -34,8 +24,8 @@ func (a *Authenticator) Middleware(next http.Handler) http.Handler {
 			return
 		}
 
-		tokenString := parts[1]
-		userID, err := a.validateToken(tokenString)
+		token := parts[1]
+		userID, err := validateToken(token)
 		if err != nil {
 			http.Error(w, "Invalid token", http.StatusUnauthorized)
 			return
@@ -46,19 +36,16 @@ func (a *Authenticator) Middleware(next http.Handler) http.Handler {
 	})
 }
 
-func (a *Authenticator) validateToken(tokenString string) (string, error) {
-	// In a real implementation, this would parse and validate JWT
-	// For this example, we'll use a simple placeholder
-	if tokenString == "" {
-		return "", http.ErrNoCookie
-	}
-	
-	// Simulated token validation
-	// In production, use a proper JWT library like github.com/golang-jwt/jwt
-	return "user-" + tokenString[:8], nil
-}
-
 func GetUserID(ctx context.Context) (string, bool) {
 	userID, ok := ctx.Value(userIDKey).(string)
 	return userID, ok
+}
+
+func validateToken(token string) (string, error) {
+	// In a real implementation, this would parse and validate a JWT
+	// For this example, we'll do a simple mock validation
+	if token == "" || len(token) < 10 {
+		return "", http.ErrAbortHandler
+	}
+	return "user_" + token[:8], nil
 }
