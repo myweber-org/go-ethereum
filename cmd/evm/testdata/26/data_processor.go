@@ -1,98 +1,97 @@
+
 package main
 
 import (
-	"encoding/json"
-	"fmt"
-	"regexp"
-	"strings"
+    "encoding/csv"
+    "errors"
+    "fmt"
+    "io"
+    "os"
+    "strconv"
 )
 
-type UserData struct {
-	Email    string `json:"email"`
-	Username string `json:"username"`
-	Age      int    `json:"age"`
+type DataRecord struct {
+    ID    int
+    Name  string
+    Value float64
 }
 
-func validateEmail(email string) bool {
-	pattern := `^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$`
-	matched, _ := regexp.MatchString(pattern, email)
-	return matched
+func ProcessCSVFile(filename string) ([]DataRecord, error) {
+    file, err := os.Open(filename)
+    if err != nil {
+        return nil, fmt.Errorf("failed to open file: %w", err)
+    }
+    defer file.Close()
+
+    reader := csv.NewReader(file)
+    records := make([]DataRecord, 0)
+
+    lineNumber := 0
+    for {
+        lineNumber++
+        row, err := reader.Read()
+        if err == io.EOF {
+            break
+        }
+        if err != nil {
+            return nil, fmt.Errorf("csv read error at line %d: %w", lineNumber, err)
+        }
+
+        if len(row) != 3 {
+            return nil, fmt.Errorf("invalid column count at line %d: expected 3, got %d", lineNumber, len(row))
+        }
+
+        id, err := strconv.Atoi(row[0])
+        if err != nil {
+            return nil, fmt.Errorf("invalid ID at line %d: %w", lineNumber, err)
+        }
+
+        name := row[1]
+        if name == "" {
+            return nil, fmt.Errorf("empty name at line %d", lineNumber)
+        }
+
+        value, err := strconv.ParseFloat(row[2], 64)
+        if err != nil {
+            return nil, fmt.Errorf("invalid value at line %d: %w", lineNumber, err)
+        }
+
+        if value < 0 {
+            return nil, fmt.Errorf("negative value at line %d: %f", lineNumber, value)
+        }
+
+        records = append(records, DataRecord{
+            ID:    id,
+            Name:  name,
+            Value: value,
+        })
+    }
+
+    if len(records) == 0 {
+        return nil, errors.New("no valid records found in file")
+    }
+
+    return records, nil
 }
 
-func sanitizeUsername(username string) string {
-	return strings.TrimSpace(username)
+func CalculateTotal(records []DataRecord) float64 {
+    total := 0.0
+    for _, record := range records {
+        total += record.Value
+    }
+    return total
 }
 
-func transformData(input []byte) (*UserData, error) {
-	var data UserData
-	err := json.Unmarshal(input, &data)
-	if err != nil {
-		return nil, fmt.Errorf("failed to unmarshal JSON: %w", err)
-	}
+func FindMaxRecord(records []DataRecord) (DataRecord, error) {
+    if len(records) == 0 {
+        return DataRecord{}, errors.New("empty record list")
+    }
 
-	if !validateEmail(data.Email) {
-		return nil, fmt.Errorf("invalid email format: %s", data.Email)
-	}
-
-	data.Username = sanitizeUsername(data.Username)
-
-	if data.Age < 0 || data.Age > 150 {
-		return nil, fmt.Errorf("age out of valid range: %d", data.Age)
-	}
-
-	return &data, nil
-}
-
-func main() {
-	jsonInput := `{"email":"test@example.com","username":"  john_doe  ","age":25}`
-	processedData, err := transformData([]byte(jsonInput))
-	if err != nil {
-		fmt.Printf("Error processing data: %v\n", err)
-		return
-	}
-	fmt.Printf("Processed data: %+v\n", processedData)
-}
-package main
-
-import (
-	"encoding/json"
-	"fmt"
-	"log"
-)
-
-type User struct {
-	ID    int    `json:"id"`
-	Name  string `json:"name"`
-	Email string `json:"email"`
-}
-
-func ValidateJSON(data []byte) (*User, error) {
-	var user User
-	err := json.Unmarshal(data, &user)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse JSON: %w", err)
-	}
-
-	if user.ID <= 0 {
-		return nil, fmt.Errorf("invalid user ID: %d", user.ID)
-	}
-	if user.Name == "" {
-		return nil, fmt.Errorf("user name cannot be empty")
-	}
-	if user.Email == "" {
-		return nil, fmt.Errorf("user email cannot be empty")
-	}
-
-	return &user, nil
-}
-
-func main() {
-	jsonData := []byte(`{"id": 123, "name": "Alice", "email": "alice@example.com"}`)
-
-	user, err := ValidateJSON(jsonData)
-	if err != nil {
-		log.Fatalf("Validation error: %v", err)
-	}
-
-	fmt.Printf("Validated user: %+v\n", user)
+    maxRecord := records[0]
+    for _, record := range records[1:] {
+        if record.Value > maxRecord.Value {
+            maxRecord = record
+        }
+    }
+    return maxRecord, nil
 }
