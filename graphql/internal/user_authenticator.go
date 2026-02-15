@@ -3,13 +3,13 @@ package middleware
 import (
     "net/http"
     "strings"
-    "github.com/dgrijalva/jwt-go"
+    "github.com/golang-jwt/jwt/v5"
 )
 
 type Claims struct {
-    Username string `json:"username"`
-    Role     string `json:"role"`
-    jwt.StandardClaims
+    UserID string `json:"user_id"`
+    Role   string `json:"role"`
+    jwt.RegisteredClaims
 }
 
 func AuthMiddleware(secretKey string) func(http.Handler) http.Handler {
@@ -17,19 +17,18 @@ func AuthMiddleware(secretKey string) func(http.Handler) http.Handler {
         return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
             authHeader := r.Header.Get("Authorization")
             if authHeader == "" {
-                http.Error(w, "Authorization header required", http.StatusUnauthorized)
+                http.Error(w, "Missing authorization header", http.StatusUnauthorized)
                 return
             }
 
             parts := strings.Split(authHeader, " ")
             if len(parts) != 2 || parts[0] != "Bearer" {
-                http.Error(w, "Invalid authorization format", http.StatusUnauthorized)
+                http.Error(w, "Invalid authorization header format", http.StatusUnauthorized)
                 return
             }
 
             tokenStr := parts[1]
             claims := &Claims{}
-
             token, err := jwt.ParseWithClaims(tokenStr, claims, func(token *jwt.Token) (interface{}, error) {
                 return []byte(secretKey), nil
             })
@@ -39,44 +38,9 @@ func AuthMiddleware(secretKey string) func(http.Handler) http.Handler {
                 return
             }
 
-            r.Header.Set("X-Username", claims.Username)
-            r.Header.Set("X-Role", claims.Role)
+            r.Header.Set("X-User-ID", claims.UserID)
+            r.Header.Set("X-User-Role", claims.Role)
             next.ServeHTTP(w, r)
         })
     }
-}package middleware
-
-import (
-	"net/http"
-	"strings"
-)
-
-type Authenticator struct {
-	secretKey string
-}
-
-func NewAuthenticator(secretKey string) *Authenticator {
-	return &Authenticator{secretKey: secretKey}
-}
-
-func (a *Authenticator) ValidateToken(token string) bool {
-	return strings.HasPrefix(token, "valid_") && len(token) > 10
-}
-
-func (a *Authenticator) Middleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		authHeader := r.Header.Get("Authorization")
-		if authHeader == "" {
-			http.Error(w, "Authorization header required", http.StatusUnauthorized)
-			return
-		}
-
-		token := strings.TrimPrefix(authHeader, "Bearer ")
-		if !a.ValidateToken(token) {
-			http.Error(w, "Invalid authentication token", http.StatusForbidden)
-			return
-		}
-
-		next.ServeHTTP(w, r)
-	})
 }
