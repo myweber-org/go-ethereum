@@ -125,3 +125,63 @@ func main() {
 		os.Exit(1)
 	}
 }
+package main
+
+import (
+	"errors"
+	"regexp"
+	"strings"
+)
+
+type UserProfile struct {
+	Username string
+	Email    string
+	Age      int
+}
+
+func NormalizeUsername(username string) (string, error) {
+	trimmed := strings.TrimSpace(username)
+	if trimmed == "" {
+		return "", errors.New("username cannot be empty")
+	}
+	if len(trimmed) < 3 {
+		return "", errors.New("username must be at least 3 characters")
+	}
+	return strings.ToLower(trimmed), nil
+}
+
+func ValidateEmail(email string) error {
+	emailRegex := regexp.MustCompile(`^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$`)
+	if !emailRegex.MatchString(email) {
+		return errors.New("invalid email format")
+	}
+	return nil
+}
+
+func ValidateAge(age int) error {
+	if age < 0 || age > 150 {
+		return errors.New("age must be between 0 and 150")
+	}
+	return nil
+}
+
+func ProcessUserProfile(profile UserProfile) (UserProfile, error) {
+	normalizedUsername, err := NormalizeUsername(profile.Username)
+	if err != nil {
+		return UserProfile{}, err
+	}
+
+	if err := ValidateEmail(profile.Email); err != nil {
+		return UserProfile{}, err
+	}
+
+	if err := ValidateAge(profile.Age); err != nil {
+		return UserProfile{}, err
+	}
+
+	return UserProfile{
+		Username: normalizedUsername,
+		Email:    strings.ToLower(strings.TrimSpace(profile.Email)),
+		Age:      profile.Age,
+	}, nil
+}
