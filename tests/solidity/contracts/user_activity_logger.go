@@ -6,24 +6,31 @@ import (
 	"time"
 )
 
-type ActivityLogger struct {
-	handler http.Handler
+type responseWriter struct {
+	http.ResponseWriter
+	statusCode int
 }
 
-func NewActivityLogger(handler http.Handler) *ActivityLogger {
-	return &ActivityLogger{handler: handler}
+func (rw *responseWriter) WriteHeader(code int) {
+	rw.statusCode = code
+	rw.ResponseWriter.WriteHeader(code)
 }
 
-func (al *ActivityLogger) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	start := time.Now()
-	al.handler.ServeHTTP(w, r)
-	duration := time.Since(start)
+func ActivityLogger(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		start := time.Now()
+		rw := &responseWriter{ResponseWriter: w, statusCode: http.StatusOK}
 
-	log.Printf(
-		"Method: %s | Path: %s | Duration: %v | Timestamp: %s",
-		r.Method,
-		r.URL.Path,
-		duration,
-		time.Now().Format(time.RFC3339),
-	)
+		next.ServeHTTP(rw, r)
+
+		duration := time.Since(start)
+		log.Printf(
+			"%s %s %d %s %s",
+			r.Method,
+			r.URL.Path,
+			rw.statusCode,
+			duration,
+			r.RemoteAddr,
+		)
+	})
 }
