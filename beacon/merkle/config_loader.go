@@ -204,4 +204,59 @@ func (c *AppConfig) Validate() error {
         return fmt.Errorf("write timeout cannot be negative")
     }
     return nil
+}package config
+
+import (
+    "fmt"
+    "os"
+    "strconv"
+    "strings"
+)
+
+type Config struct {
+    ServerPort int
+    DatabaseURL string
+    EnableDebug bool
+    AllowedOrigins []string
+}
+
+func Load() (*Config, error) {
+    cfg := &Config{}
+    
+    portStr := os.Getenv("SERVER_PORT")
+    if portStr == "" {
+        portStr = "8080"
+    }
+    port, err := strconv.Atoi(portStr)
+    if err != nil {
+        return nil, fmt.Errorf("invalid SERVER_PORT: %v", err)
+    }
+    cfg.ServerPort = port
+    
+    cfg.DatabaseURL = os.Getenv("DATABASE_URL")
+    if cfg.DatabaseURL == "" {
+        return nil, fmt.Errorf("DATABASE_URL is required")
+    }
+    
+    debugStr := os.Getenv("ENABLE_DEBUG")
+    cfg.EnableDebug = strings.ToLower(debugStr) == "true"
+    
+    origins := os.Getenv("ALLOWED_ORIGINS")
+    if origins != "" {
+        cfg.AllowedOrigins = strings.Split(origins, ",")
+    } else {
+        cfg.AllowedOrigins = []string{"*"}
+    }
+    
+    return cfg, nil
+}
+
+func (c *Config) Validate() error {
+    if c.ServerPort < 1 || c.ServerPort > 65535 {
+        return fmt.Errorf("server port must be between 1 and 65535")
+    }
+    if !strings.HasPrefix(c.DatabaseURL, "postgres://") {
+        return fmt.Errorf("database URL must use postgres protocol")
+    }
+    return nil
 }
