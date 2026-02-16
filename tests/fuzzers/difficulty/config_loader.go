@@ -1,109 +1,56 @@
 package config
 
 import (
-    "fmt"
-    "io/ioutil"
     "os"
-
-    "gopkg.in/yaml.v2"
+    "strconv"
+    "strings"
 )
 
-type DatabaseConfig struct {
-    Host     string `yaml:"host"`
-    Port     int    `yaml:"port"`
-    Username string `yaml:"username"`
-    Password string `yaml:"password"`
-    Name     string `yaml:"name"`
+type Config struct {
+    DatabaseURL  string
+    MaxConnections int
+    DebugMode    bool
+    AllowedHosts []string
 }
 
-type ServerConfig struct {
-    Port int    `yaml:"port"`
-    Mode string `yaml:"mode"`
+func Load() (*Config, error) {
+    cfg := &Config{
+        DatabaseURL:  getEnv("DB_URL", "postgres://localhost:5432/app"),
+        MaxConnections: getEnvAsInt("MAX_CONNECTIONS", 10),
+        DebugMode:    getEnvAsBool("DEBUG_MODE", false),
+        AllowedHosts: getEnvAsSlice("ALLOWED_HOSTS", []string{"localhost", "127.0.0.1"}),
+    }
+    
+    return cfg, nil
 }
 
-type AppConfig struct {
-    Database DatabaseConfig `yaml:"database"`
-    Server   ServerConfig   `yaml:"server"`
-    LogLevel string         `yaml:"log_level"`
+func getEnv(key, defaultValue string) string {
+    if value, exists := os.LookupEnv(key); exists {
+        return value
+    }
+    return defaultValue
 }
 
-func LoadConfig(configPath string) (*AppConfig, error) {
-    if configPath == "" {
-        configPath = "config.yaml"
+func getEnvAsInt(key string, defaultValue int) int {
+    valueStr := getEnv(key, "")
+    if value, err := strconv.Atoi(valueStr); err == nil {
+        return value
     }
-
-    file, err := os.Open(configPath)
-    if err != nil {
-        return nil, fmt.Errorf("failed to open config file: %w", err)
-    }
-    defer file.Close()
-
-    data, err := ioutil.ReadAll(file)
-    if err != nil {
-        return nil, fmt.Errorf("failed to read config file: %w", err)
-    }
-
-    var config AppConfig
-    if err := yaml.Unmarshal(data, &config); err != nil {
-        return nil, fmt.Errorf("failed to parse YAML config: %w", err)
-    }
-
-    if config.Database.Host == "" {
-        config.Database.Host = "localhost"
-    }
-
-    if config.Database.Port == 0 {
-        config.Database.Port = 5432
-    }
-
-    if config.Server.Port == 0 {
-        config.Server.Port = 8080
-    }
-
-    if config.Server.Mode == "" {
-        config.Server.Mode = "development"
-    }
-
-    if config.LogLevel == "" {
-        config.LogLevel = "info"
-    }
-
-    return &config, nil
+    return defaultValue
 }
 
-func ValidateConfig(config *AppConfig) error {
-    if config.Database.Name == "" {
-        return fmt.Errorf("database name is required")
+func getEnvAsBool(key string, defaultValue bool) bool {
+    valueStr := getEnv(key, "")
+    if val, err := strconv.ParseBool(valueStr); err == nil {
+        return val
     }
+    return defaultValue
+}
 
-    if config.Database.Username == "" {
-        return fmt.Errorf("database username is required")
+func getEnvAsSlice(key string, defaultValue []string) []string {
+    valueStr := getEnv(key, "")
+    if valueStr == "" {
+        return defaultValue
     }
-
-    if config.Server.Port < 1 || config.Server.Port > 65535 {
-        return fmt.Errorf("server port must be between 1 and 65535")
-    }
-
-    validModes := map[string]bool{
-        "development": true,
-        "staging":     true,
-        "production":  true,
-    }
-
-    if !validModes[config.Server.Mode] {
-        return fmt.Errorf("invalid server mode: %s", config.Server.Mode)
-    }
-
-    validLogLevels := map[string]bool{
-        "debug":   true,
-        "info":    true,
-        "warning": true,
-        "error":   true,
-    }
-
-    if !validLogLevels[config.LogLevel] {
-        return fmt.Errorf("invalid log level: %s", config.LogLevel)
-    }
-
-    return nil
+    return strings.Split(valueStr, ",")
 }
