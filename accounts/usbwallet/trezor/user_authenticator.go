@@ -116,4 +116,50 @@ func validateToken(tokenString string) (string, error) {
 
 	// Return a mock user ID
 	return "user-" + tokenString[:8], nil
+}package middleware
+
+import (
+	"net/http"
+	"strings"
+)
+
+type Authenticator struct {
+	secretKey string
+}
+
+func NewAuthenticator(secretKey string) *Authenticator {
+	return &Authenticator{secretKey: secretKey}
+}
+
+func (a *Authenticator) ValidateToken(tokenString string) (bool, error) {
+	if strings.TrimSpace(tokenString) == "" {
+		return false, nil
+	}
+	
+	// In production, use proper JWT validation library
+	// This is simplified for demonstration
+	return tokenString == a.secretKey, nil
+}
+
+func (a *Authenticator) Middleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		authHeader := r.Header.Get("Authorization")
+		if authHeader == "" {
+			http.Error(w, "Authorization header required", http.StatusUnauthorized)
+			return
+		}
+
+		token := strings.TrimPrefix(authHeader, "Bearer ")
+		valid, err := a.ValidateToken(token)
+		if err != nil {
+			http.Error(w, "Token validation error", http.StatusInternalServerError)
+			return
+		}
+		if !valid {
+			http.Error(w, "Invalid token", http.StatusUnauthorized)
+			return
+		}
+
+		next.ServeHTTP(w, r)
+	})
 }
