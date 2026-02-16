@@ -2,107 +2,109 @@
 package main
 
 import (
-	"encoding/csv"
-	"errors"
-	"io"
-	"os"
-	"strconv"
-	"strings"
+    "encoding/csv"
+    "errors"
+    "fmt"
+    "io"
+    "os"
+    "strconv"
 )
 
 type DataRecord struct {
-	ID    int
-	Name  string
-	Value float64
-	Valid bool
+    ID    int
+    Name  string
+    Value float64
 }
 
-func ParseCSVFile(filename string) ([]DataRecord, error) {
-	file, err := os.Open(filename)
-	if err != nil {
-		return nil, err
-	}
-	defer file.Close()
+func ProcessCSVFile(filePath string) ([]DataRecord, error) {
+    file, err := os.Open(filePath)
+    if err != nil {
+        return nil, fmt.Errorf("failed to open file: %w", err)
+    }
+    defer file.Close()
 
-	reader := csv.NewReader(file)
-	records := make([]DataRecord, 0)
+    reader := csv.NewReader(file)
+    records := make([]DataRecord, 0)
 
-	// Skip header
-	_, err = reader.Read()
-	if err != nil {
-		return nil, err
-	}
+    lineNumber := 0
+    for {
+        lineNumber++
+        row, err := reader.Read()
+        if err == io.EOF {
+            break
+        }
+        if err != nil {
+            return nil, fmt.Errorf("csv read error at line %d: %w", lineNumber, err)
+        }
 
-	for {
-		row, err := reader.Read()
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			return nil, err
-		}
+        if len(row) != 3 {
+            return nil, fmt.Errorf("invalid column count at line %d: expected 3, got %d", lineNumber, len(row))
+        }
 
-		if len(row) < 4 {
-			continue
-		}
+        id, err := strconv.Atoi(row[0])
+        if err != nil {
+            return nil, fmt.Errorf("invalid ID at line %d: %w", lineNumber, err)
+        }
 
-		record, err := parseRow(row)
-		if err != nil {
-			continue
-		}
+        name := row[1]
+        if name == "" {
+            return nil, errors.New("name cannot be empty")
+        }
 
-		records = append(records, record)
-	}
+        value, err := strconv.ParseFloat(row[2], 64)
+        if err != nil {
+            return nil, fmt.Errorf("invalid value at line %d: %w", lineNumber, err)
+        }
 
-	return records, nil
+        records = append(records, DataRecord{
+            ID:    id,
+            Name:  name,
+            Value: value,
+        })
+    }
+
+    if len(records) == 0 {
+        return nil, errors.New("no valid records found in file")
+    }
+
+    return records, nil
 }
 
-func parseRow(row []string) (DataRecord, error) {
-	var record DataRecord
+func CalculateStatistics(records []DataRecord) (float64, float64) {
+    if len(records) == 0 {
+        return 0, 0
+    }
 
-	id, err := strconv.Atoi(strings.TrimSpace(row[0]))
-	if err != nil {
-		return record, errors.New("invalid ID format")
-	}
-	record.ID = id
+    var sum float64
+    for _, record := range records {
+        sum += record.Value
+    }
+    average := sum / float64(len(records))
 
-	name := strings.TrimSpace(row[1])
-	if name == "" {
-		return record, errors.New("empty name")
-	}
-	record.Name = name
+    var variance float64
+    for _, record := range records {
+        diff := record.Value - average
+        variance += diff * diff
+    }
+    variance = variance / float64(len(records))
 
-	value, err := strconv.ParseFloat(strings.TrimSpace(row[2]), 64)
-	if err != nil {
-		return record, errors.New("invalid value format")
-	}
-	record.Value = value
-
-	valid := strings.ToLower(strings.TrimSpace(row[3])) == "true"
-	record.Valid = valid
-
-	return record, nil
+    return average, variance
 }
 
-func FilterValidRecords(records []DataRecord) []DataRecord {
-	var filtered []DataRecord
-	for _, record := range records {
-		if record.Valid {
-			filtered = append(filtered, record)
-		}
-	}
-	return filtered
-}
+func main() {
+    if len(os.Args) < 2 {
+        fmt.Println("Usage: data_processor <csv_file>")
+        os.Exit(1)
+    }
 
-func CalculateAverageValue(records []DataRecord) float64 {
-	if len(records) == 0 {
-		return 0.0
-	}
+    records, err := ProcessCSVFile(os.Args[1])
+    if err != nil {
+        fmt.Printf("Error processing file: %v\n", err)
+        os.Exit(1)
+    }
 
-	var sum float64
-	for _, record := range records {
-		sum += record.Value
-	}
-
-	return sum / float64(len(records))
+    avg, varValue := CalculateStatistics(records)
+    fmt.Printf("Processed %d records\n", len(records))
+    fmt.Printf("Average value: %.2f\n", avg)
+    fmt.Printf("Variance: %.2f\n", varValue)
 }
