@@ -71,4 +71,66 @@ func (c *Cleaner) cleanup() {
 			delete(c.sessions, id)
 		}
 	}
+}package main
+
+import (
+    "context"
+    "fmt"
+    "log"
+    "time"
+
+    "github.com/go-redis/redis/v8"
+)
+
+const (
+    sessionPrefix = "session:"
+    sessionTTL    = 24 * time.Hour
+)
+
+func cleanupExpiredSessions(rdb *redis.Client) error {
+    ctx := context.Background()
+    pattern := sessionPrefix + "*"
+
+    iter := rdb.Scan(ctx, 0, pattern, 0).Iterator()
+    for iter.Next(ctx) {
+        key := iter.Val()
+        ttl, err := rdb.TTL(ctx, key).Result()
+        if err != nil {
+            log.Printf("Failed to get TTL for key %s: %v", key, err)
+            continue
+        }
+
+        if ttl < 0 {
+            if err := rdb.Del(ctx, key).Err(); err != nil {
+                log.Printf("Failed to delete expired session %s: %v", key, err)
+            } else {
+                log.Printf("Removed expired session: %s", key)
+            }
+        }
+    }
+
+    if err := iter.Err(); err != nil {
+        return fmt.Errorf("iteration error: %w", err)
+    }
+
+    return nil
+}
+
+func main() {
+    rdb := redis.NewClient(&redis.Options{
+        Addr:     "localhost:6379",
+        Password: "",
+        DB:       0,
+    })
+
+    defer rdb.Close()
+
+    ticker := time.NewTicker(time.Hour)
+    defer ticker.Stop()
+
+    for range ticker.C {
+        if err := cleanupExpiredSessions(rdb); err != nil {
+            log.Printf("Session cleanup failed: %v", err)
+        }
+    }
 }
