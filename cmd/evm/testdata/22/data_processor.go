@@ -97,4 +97,50 @@ func main() {
 	}
 
 	fmt.Println("Data processing completed successfully")
+}package main
+
+import (
+    "encoding/json"
+    "fmt"
+    "os"
+)
+
+type Config struct {
+    ServerAddress string `json:"server_address"`
+    Port          int    `json:"port"`
+    EnableLogging bool   `json:"enable_logging"`
+    MaxConnections int   `json:"max_connections"`
+}
+
+func LoadConfig(filename string) (*Config, error) {
+    file, err := os.Open(filename)
+    if err != nil {
+        return nil, fmt.Errorf("failed to open config file: %w", err)
+    }
+    defer file.Close()
+
+    var config Config
+    decoder := json.NewDecoder(file)
+    if err := decoder.Decode(&config); err != nil {
+        return nil, fmt.Errorf("failed to decode JSON: %w", err)
+    }
+
+    if err := validateConfig(&config); err != nil {
+        return nil, fmt.Errorf("config validation failed: %w", err)
+    }
+
+    return &config, nil
+}
+
+func validateConfig(c *Config) error {
+    if c.ServerAddress == "" {
+        return fmt.Errorf("server_address cannot be empty")
+    }
+    if c.Port <= 0 || c.Port > 65535 {
+        return fmt.Errorf("port must be between 1 and 65535")
+    }
+    if c.MaxConnections < 1 {
+        return fmt.Errorf("max_connections must be at least 1")
+    }
+    return nil
 }
