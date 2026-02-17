@@ -103,4 +103,66 @@ func (al *ActivityLogger) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		r.RemoteAddr,
 		duration,
 	)
+}package main
+
+import (
+	"encoding/json"
+	"fmt"
+	"log"
+	"os"
+	"time"
+)
+
+type UserActivity struct {
+	UserID    string    `json:"user_id"`
+	Action    string    `json:"action"`
+	Timestamp time.Time `json:"timestamp"`
+	Details   string    `json:"details,omitempty"`
+}
+
+type ActivityLogger struct {
+	logFile *os.File
+}
+
+func NewActivityLogger(filename string) (*ActivityLogger, error) {
+	file, err := os.OpenFile(filename, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		return nil, err
+	}
+	return &ActivityLogger{logFile: file}, nil
+}
+
+func (al *ActivityLogger) LogActivity(activity UserActivity) error {
+	activity.Timestamp = time.Now().UTC()
+	data, err := json.Marshal(activity)
+	if err != nil {
+		return err
+	}
+	data = append(data, '\n')
+	_, err = al.logFile.Write(data)
+	return err
+}
+
+func (al *ActivityLogger) Close() error {
+	return al.logFile.Close()
+}
+
+func main() {
+	logger, err := NewActivityLogger("user_activities.log")
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer logger.Close()
+
+	activity := UserActivity{
+		UserID:  "user123",
+		Action:  "login",
+		Details: "Successful authentication",
+	}
+
+	if err := logger.LogActivity(activity); err != nil {
+		log.Fatal(err)
+	}
+
+	fmt.Println("Activity logged successfully")
 }
