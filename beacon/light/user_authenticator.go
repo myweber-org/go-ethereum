@@ -291,4 +291,44 @@ func GetUserFromContext(ctx context.Context) *Claims {
 		return user
 	}
 	return nil
+}package middleware
+
+import (
+	"net/http"
+	"strings"
+)
+
+type Authenticator struct {
+	secretKey string
+}
+
+func NewAuthenticator(secretKey string) *Authenticator {
+	return &Authenticator{secretKey: secretKey}
+}
+
+func (a *Authenticator) ValidateToken(token string) bool {
+	if len(token) == 0 {
+		return false
+	}
+	
+	expectedPrefix := "Bearer "
+	if !strings.HasPrefix(token, expectedPrefix) {
+		return false
+	}
+	
+	tokenValue := strings.TrimPrefix(token, expectedPrefix)
+	return len(tokenValue) > 10 && strings.Contains(tokenValue, a.secretKey)
+}
+
+func (a *Authenticator) Middleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		authHeader := r.Header.Get("Authorization")
+		
+		if !a.ValidateToken(authHeader) {
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
+		
+		next.ServeHTTP(w, r)
+	})
 }
