@@ -134,4 +134,96 @@ func main() {
 		fmt.Println("Invalid operation. Use 'encrypt' or 'decrypt'")
 		os.Exit(1)
 	}
+}package main
+
+import (
+	"crypto/aes"
+	"crypto/cipher"
+	"crypto/rand"
+	"encoding/hex"
+	"fmt"
+	"io"
+)
+
+func encrypt(plaintext []byte, key []byte) (string, error) {
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		return "", err
+	}
+
+	gcm, err := cipher.NewGCM(block)
+	if err != nil {
+		return "", err
+	}
+
+	nonce := make([]byte, gcm.NonceSize())
+	if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
+		return "", err
+	}
+
+	ciphertext := gcm.Seal(nonce, nonce, plaintext, nil)
+	return hex.EncodeToString(ciphertext), nil
+}
+
+func decrypt(ciphertextHex string, key []byte) (string, error) {
+	ciphertext, err := hex.DecodeString(ciphertextHex)
+	if err != nil {
+		return "", err
+	}
+
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		return "", err
+	}
+
+	gcm, err := cipher.NewGCM(block)
+	if err != nil {
+		return "", err
+	}
+
+	nonceSize := gcm.NonceSize()
+	if len(ciphertext) < nonceSize {
+		return "", fmt.Errorf("ciphertext too short")
+	}
+
+	nonce, ciphertext := ciphertext[:nonceSize], ciphertext[nonceSize:]
+	plaintext, err := gcm.Open(nil, nonce, ciphertext, nil)
+	if err != nil {
+		return "", err
+	}
+
+	return string(plaintext), nil
+}
+
+func generateKey() ([]byte, error) {
+	key := make([]byte, 32)
+	if _, err := io.ReadFull(rand.Reader, key); err != nil {
+		return nil, err
+	}
+	return key, nil
+}
+
+func main() {
+	key, err := generateKey()
+	if err != nil {
+		fmt.Printf("Key generation error: %v\n", err)
+		return
+	}
+
+	message := "Sensitive data requiring protection"
+	fmt.Printf("Original: %s\n", message)
+
+	encrypted, err := encrypt([]byte(message), key)
+	if err != nil {
+		fmt.Printf("Encryption error: %v\n", err)
+		return
+	}
+	fmt.Printf("Encrypted: %s\n", encrypted)
+
+	decrypted, err := decrypt(encrypted, key)
+	if err != nil {
+		fmt.Printf("Decryption error: %v\n", err)
+		return
+	}
+	fmt.Printf("Decrypted: %s\n", decrypted)
 }
