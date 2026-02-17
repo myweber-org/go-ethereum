@@ -2,74 +2,61 @@
 package main
 
 import (
+	"encoding/csv"
 	"fmt"
-	"strings"
+	"os"
 )
 
-type DataRecord struct {
-	ID    int
-	Name  string
-	Email string
-	Valid bool
-}
+func removeDuplicates(inputPath, outputPath string) error {
+	inputFile, err := os.Open(inputPath)
+	if err != nil {
+		return fmt.Errorf("failed to open input file: %w", err)
+	}
+	defer inputFile.Close()
 
-func deduplicateRecords(records []DataRecord) []DataRecord {
+	reader := csv.NewReader(inputFile)
+	records, err := reader.ReadAll()
+	if err != nil {
+		return fmt.Errorf("failed to read CSV: %w", err)
+	}
+
 	seen := make(map[string]bool)
-	var unique []DataRecord
+	var uniqueRecords [][]string
 
 	for _, record := range records {
-		key := fmt.Sprintf("%s|%s", record.Name, record.Email)
+		if len(record) == 0 {
+			continue
+		}
+		key := record[0]
 		if !seen[key] {
 			seen[key] = true
-			unique = append(unique, record)
+			uniqueRecords = append(uniqueRecords, record)
 		}
 	}
-	return unique
-}
 
-func validateEmail(email string) bool {
-	if !strings.Contains(email, "@") {
-		return false
+	outputFile, err := os.Create(outputPath)
+	if err != nil {
+		return fmt.Errorf("failed to create output file: %w", err)
 	}
-	parts := strings.Split(email, "@")
-	if len(parts) != 2 {
-		return false
-	}
-	return len(parts[0]) > 0 && len(parts[1]) > 0
-}
+	defer outputFile.Close()
 
-func validateRecords(records []DataRecord) []DataRecord {
-	var validated []DataRecord
-	for _, record := range records {
-		record.Valid = validateEmail(record.Email)
-		validated = append(validated, record)
-	}
-	return validated
-}
+	writer := csv.NewWriter(outputFile)
+	defer writer.Flush()
 
-func processData(records []DataRecord) []DataRecord {
-	unique := deduplicateRecords(records)
-	validated := validateRecords(unique)
-	return validated
+	return writer.WriteAll(uniqueRecords)
 }
 
 func main() {
-	sampleData := []DataRecord{
-		{1, "John Doe", "john@example.com", false},
-		{2, "Jane Smith", "jane@example.com", false},
-		{3, "John Doe", "john@example.com", false},
-		{4, "Bob Wilson", "invalid-email", false},
+	if len(os.Args) != 3 {
+		fmt.Println("Usage: data_cleaner <input.csv> <output.csv>")
+		os.Exit(1)
 	}
 
-	processed := processData(sampleData)
-
-	fmt.Println("Processed Records:")
-	for _, record := range processed {
-		status := "Invalid"
-		if record.Valid {
-			status = "Valid"
-		}
-		fmt.Printf("ID: %d, Name: %s, Email: %s, Status: %s\n",
-			record.ID, record.Name, record.Email, status)
+	err := removeDuplicates(os.Args[1], os.Args[2])
+	if err != nil {
+		fmt.Printf("Error: %v\n", err)
+		os.Exit(1)
 	}
+
+	fmt.Println("Duplicate removal completed successfully")
 }
