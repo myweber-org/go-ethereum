@@ -59,3 +59,68 @@ func (m *mockSessionStore) DeleteExpiredSessions(ctx context.Context) error {
 	time.Sleep(100 * time.Millisecond)
 	return nil
 }
+package main
+
+import (
+    "context"
+    "log"
+    "time"
+)
+
+type SessionStore interface {
+    DeleteExpiredSessions(ctx context.Context) error
+}
+
+type SessionCleanupJob struct {
+    store     SessionStore
+    interval  time.Duration
+    logger    *log.Logger
+    stopChan  chan struct{}
+}
+
+func NewSessionCleanupJob(store SessionStore, interval time.Duration, logger *log.Logger) *SessionCleanupJob {
+    return &SessionCleanupJob{
+        store:    store,
+        interval: interval,
+        logger:   logger,
+        stopChan: make(chan struct{}),
+    }
+}
+
+func (j *SessionCleanupJob) Start() {
+    go j.run()
+}
+
+func (j *SessionCleanupJob) Stop() {
+    close(j.stopChan)
+}
+
+func (j *SessionCleanupJob) run() {
+    ticker := time.NewTicker(j.interval)
+    defer ticker.Stop()
+
+    for {
+        select {
+        case <-ticker.C:
+            j.executeCleanup()
+        case <-j.stopChan:
+            j.logger.Println("Session cleanup job stopped")
+            return
+        }
+    }
+}
+
+func (j *SessionCleanupJob) executeCleanup() {
+    ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+    defer cancel()
+
+    start := time.Now()
+    err := j.store.DeleteExpiredSessions(ctx)
+    duration := time.Since(start)
+
+    if err != nil {
+        j.logger.Printf("Failed to clean up expired sessions: %v", err)
+    } else {
+        j.logger.Printf("Session cleanup completed in %v", duration)
+    }
+}
