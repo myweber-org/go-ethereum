@@ -2,40 +2,44 @@ package config
 
 import (
     "fmt"
+    "io/ioutil"
     "os"
-    "path/filepath"
 
     "gopkg.in/yaml.v2"
 )
 
 type DatabaseConfig struct {
-    Host     string `yaml:"host" env:"DB_HOST"`
-    Port     int    `yaml:"port" env:"DB_PORT"`
-    Username string `yaml:"username" env:"DB_USER"`
-    Password string `yaml:"password" env:"DB_PASS"`
-    Name     string `yaml:"name" env:"DB_NAME"`
+    Host     string `yaml:"host"`
+    Port     int    `yaml:"port"`
+    Username string `yaml:"username"`
+    Password string `yaml:"password"`
+    Name     string `yaml:"name"`
 }
 
 type ServerConfig struct {
-    Port         int    `yaml:"port" env:"SERVER_PORT"`
-    ReadTimeout  int    `yaml:"read_timeout" env:"SERVER_READ_TIMEOUT"`
-    WriteTimeout int    `yaml:"write_timeout" env:"SERVER_WRITE_TIMEOUT"`
-    DebugMode    bool   `yaml:"debug_mode" env:"SERVER_DEBUG"`
+    Port         int            `yaml:"port"`
+    Debug        bool           `yaml:"debug"`
+    ReadTimeout  int            `yaml:"read_timeout"`
+    WriteTimeout int            `yaml:"write_timeout"`
 }
 
 type AppConfig struct {
-    Database DatabaseConfig `yaml:"database"`
     Server   ServerConfig   `yaml:"server"`
-    Version  string         `yaml:"version"`
+    Database DatabaseConfig `yaml:"database"`
 }
 
 func LoadConfig(configPath string) (*AppConfig, error) {
-    absPath, err := filepath.Abs(configPath)
-    if err != nil {
-        return nil, fmt.Errorf("invalid config path: %w", err)
+    if configPath == "" {
+        configPath = "config.yaml"
     }
 
-    data, err := os.ReadFile(absPath)
+    file, err := os.Open(configPath)
+    if err != nil {
+        return nil, fmt.Errorf("failed to open config file: %w", err)
+    }
+    defer file.Close()
+
+    data, err := ioutil.ReadAll(file)
     if err != nil {
         return nil, fmt.Errorf("failed to read config file: %w", err)
     }
@@ -45,13 +49,29 @@ func LoadConfig(configPath string) (*AppConfig, error) {
         return nil, fmt.Errorf("failed to parse YAML: %w", err)
     }
 
-    overrideFromEnv(&config.Database)
-    overrideFromEnv(&config.Server)
+    if err := validateConfig(&config); err != nil {
+        return nil, fmt.Errorf("config validation failed: %w", err)
+    }
 
     return &config, nil
 }
 
-func overrideFromEnv(config interface{}) {
-    // Environment variable override logic would be implemented here
-    // This is a placeholder for the actual implementation
+func validateConfig(config *AppConfig) error {
+    if config.Server.Port <= 0 || config.Server.Port > 65535 {
+        return fmt.Errorf("invalid server port: %d", config.Server.Port)
+    }
+
+    if config.Database.Host == "" {
+        return fmt.Errorf("database host cannot be empty")
+    }
+
+    if config.Database.Port <= 0 || config.Database.Port > 65535 {
+        return fmt.Errorf("invalid database port: %d", config.Database.Port)
+    }
+
+    if config.Database.Name == "" {
+        return fmt.Errorf("database name cannot be empty")
+    }
+
+    return nil
 }
