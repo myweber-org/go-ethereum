@@ -1,30 +1,46 @@
-package middleware
+package main
 
 import (
-	"log"
-	"net/http"
-	"time"
+    "encoding/json"
+    "fmt"
+    "os"
+    "time"
 )
 
-type ActivityLogger struct {
-	handler http.Handler
+type ActivityLog struct {
+    Timestamp time.Time `json:"timestamp"`
+    UserID    string    `json:"user_id"`
+    Action    string    `json:"action"`
+    Details   string    `json:"details"`
 }
 
-func NewActivityLogger(handler http.Handler) *ActivityLogger {
-	return &ActivityLogger{handler: handler}
+func logActivity(userID, action, details string) error {
+    logEntry := ActivityLog{
+        Timestamp: time.Now(),
+        UserID:    userID,
+        Action:    action,
+        Details:   details,
+    }
+
+    file, err := os.OpenFile("activity.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+    if err != nil {
+        return err
+    }
+    defer file.Close()
+
+    encoder := json.NewEncoder(file)
+    if err := encoder.Encode(logEntry); err != nil {
+        return err
+    }
+
+    return nil
 }
 
-func (al *ActivityLogger) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	start := time.Now()
-	
-	al.handler.ServeHTTP(w, r)
-	
-	duration := time.Since(start)
-	
-	log.Printf("Activity: %s %s from %s took %v",
-		r.Method,
-		r.URL.Path,
-		r.RemoteAddr,
-		duration,
-	)
+func main() {
+    err := logActivity("user123", "login", "Successful authentication")
+    if err != nil {
+        fmt.Printf("Failed to log activity: %v\n", err)
+        return
+    }
+    fmt.Println("Activity logged successfully")
 }
