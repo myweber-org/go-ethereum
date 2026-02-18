@@ -1,27 +1,3 @@
-
-package main
-
-import "fmt"
-
-func RemoveDuplicates(input []int) []int {
-	seen := make(map[int]bool)
-	result := []int{}
-
-	for _, value := range input {
-		if !seen[value] {
-			seen[value] = true
-			result = append(result, value)
-		}
-	}
-	return result
-}
-
-func main() {
-	data := []int{1, 2, 2, 3, 4, 4, 5, 1, 6}
-	cleaned := RemoveDuplicates(data)
-	fmt.Printf("Original: %v\n", data)
-	fmt.Printf("Cleaned: %v\n", cleaned)
-}
 package main
 
 import (
@@ -29,83 +5,112 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strconv"
 	"strings"
 )
 
-func cleanCSVData(inputPath, outputPath string) error {
-	inFile, err := os.Open(inputPath)
+type Record struct {
+	ID    int
+	Name  string
+	Email string
+	Age   int
+}
+
+func cleanEmail(email string) string {
+	return strings.ToLower(strings.TrimSpace(email))
+}
+
+func validateAge(age int) bool {
+	return age >= 0 && age <= 120
+}
+
+func parseCSV(filename string) ([]Record, error) {
+	file, err := os.Open(filename)
 	if err != nil {
-		return fmt.Errorf("failed to open input file: %w", err)
+		return nil, err
 	}
-	defer inFile.Close()
+	defer file.Close()
 
-	outFile, err := os.Create(outputPath)
-	if err != nil {
-		return fmt.Errorf("failed to create output file: %w", err)
-	}
-	defer outFile.Close()
+	reader := csv.NewReader(file)
+	var records []Record
+	lineNum := 0
 
-	reader := csv.NewReader(inFile)
-	writer := csv.NewWriter(outFile)
-	defer writer.Flush()
-
-	headers, err := reader.Read()
-	if err != nil {
-		return fmt.Errorf("failed to read headers: %w", err)
-	}
-
-	cleanedHeaders := make([]string, len(headers))
-	for i, h := range headers {
-		cleanedHeaders[i] = strings.TrimSpace(strings.ToLower(h))
-	}
-
-	if err := writer.Write(cleanedHeaders); err != nil {
-		return fmt.Errorf("failed to write headers: %w", err)
-	}
-
-	recordCount := 0
 	for {
-		record, err := reader.Read()
+		line, err := reader.Read()
 		if err == io.EOF {
 			break
 		}
 		if err != nil {
-			return fmt.Errorf("error reading record: %w", err)
+			return nil, err
+		}
+		lineNum++
+
+		if lineNum == 1 {
+			continue
 		}
 
-		cleanedRecord := make([]string, len(record))
-		hasEmpty := false
-		for i, field := range record {
-			cleaned := strings.TrimSpace(field)
-			if cleaned == "" {
-				hasEmpty = true
-			}
-			cleanedRecord[i] = cleaned
+		if len(line) < 4 {
+			continue
 		}
 
-		if !hasEmpty {
-			if err := writer.Write(cleanedRecord); err != nil {
-				return fmt.Errorf("failed to write record: %w", err)
-			}
-			recordCount++
+		id, err1 := strconv.Atoi(strings.TrimSpace(line[0]))
+		age, err2 := strconv.Atoi(strings.TrimSpace(line[3]))
+
+		if err1 != nil || err2 != nil {
+			continue
 		}
+
+		if !validateAge(age) {
+			continue
+		}
+
+		record := Record{
+			ID:    id,
+			Name:  strings.TrimSpace(line[1]),
+			Email: cleanEmail(line[2]),
+			Age:   age,
+		}
+		records = append(records, record)
 	}
 
-	fmt.Printf("Process completed. Cleaned %d records.\n", recordCount)
-	return nil
+	return records, nil
+}
+
+func removeDuplicates(records []Record) []Record {
+	seen := make(map[string]bool)
+	var unique []Record
+
+	for _, record := range records {
+		key := record.Email
+		if !seen[key] {
+			seen[key] = true
+			unique = append(unique, record)
+		}
+	}
+	return unique
+}
+
+func generateReport(records []Record) {
+	fmt.Printf("Total valid records: %d\n", len(records))
+	fmt.Println("ID | Name | Email | Age")
+	fmt.Println("---|------|-------|----")
+	for _, record := range records {
+		fmt.Printf("%d | %s | %s | %d\n", record.ID, record.Name, record.Email, record.Age)
+	}
 }
 
 func main() {
-	if len(os.Args) != 3 {
-		fmt.Println("Usage: data_cleaner <input.csv> <output.csv>")
-		os.Exit(1)
+	if len(os.Args) < 2 {
+		fmt.Println("Usage: go run data_cleaner.go <csv_file>")
+		return
 	}
 
-	inputFile := os.Args[1]
-	outputFile := os.Args[2]
-
-	if err := cleanCSVData(inputFile, outputFile); err != nil {
-		fmt.Printf("Error: %v\n", err)
-		os.Exit(1)
+	records, err := parseCSV(os.Args[1])
+	if err != nil {
+		fmt.Printf("Error reading CSV: %v\n", err)
+		return
 	}
+
+	uniqueRecords := removeDuplicates(records)
+	generateReport(uniqueRecords)
 }
