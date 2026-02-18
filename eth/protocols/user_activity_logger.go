@@ -47,4 +47,74 @@ type responseRecorder struct {
 func (rr *responseRecorder) WriteHeader(code int) {
 	rr.statusCode = code
 	rr.ResponseWriter.WriteHeader(code)
+}package main
+
+import (
+	"encoding/json"
+	"fmt"
+	"log"
+	"os"
+	"time"
+)
+
+type ActivityLog struct {
+	Timestamp time.Time `json:"timestamp"`
+	UserID    string    `json:"user_id"`
+	Action    string    `json:"action"`
+	Resource  string    `json:"resource"`
+	Details   string    `json:"details"`
+}
+
+func NewActivityLog(userID, action, resource, details string) *ActivityLog {
+	return &ActivityLog{
+		Timestamp: time.Now().UTC(),
+		UserID:    userID,
+		Action:    action,
+		Resource:  resource,
+		Details:   details,
+	}
+}
+
+func (al *ActivityLog) ToJSON() ([]byte, error) {
+	return json.MarshalIndent(al, "", "  ")
+}
+
+func (al *ActivityLog) SaveToFile(filename string) error {
+	file, err := os.OpenFile(filename, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	jsonData, err := al.ToJSON()
+	if err != nil {
+		return err
+	}
+
+	_, err = file.Write(append(jsonData, '\n'))
+	return err
+}
+
+func main() {
+	logger := NewActivityLog(
+		"user_12345",
+		"LOGIN",
+		"authentication",
+		"User logged in from IP 192.168.1.100",
+	)
+
+	jsonOutput, err := logger.ToJSON()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	fmt.Println("Activity Log:")
+	fmt.Println(string(jsonOutput))
+
+	err = logger.SaveToFile("activity_logs.json")
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	fmt.Println("Log saved to activity_logs.json")
 }
