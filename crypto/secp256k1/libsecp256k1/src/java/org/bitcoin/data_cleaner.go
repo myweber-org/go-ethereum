@@ -1,24 +1,30 @@
 
 package main
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
 
-func RemoveDuplicates(input []string) []string {
-	seen := make(map[string]struct{})
-	result := make([]string, 0, len(input))
+func CleanData(input []string) []string {
+	seen := make(map[string]bool)
+	var result []string
 
 	for _, item := range input {
-		if _, exists := seen[item]; !exists {
-			seen[item] = struct{}{}
-			result = append(result, item)
+		trimmed := strings.TrimSpace(item)
+		if trimmed == "" {
+			continue
+		}
+		if !seen[trimmed] {
+			seen[trimmed] = true
+			result = append(result, trimmed)
 		}
 	}
 	return result
 }
 
 func main() {
-	data := []string{"apple", "banana", "apple", "cherry", "banana", "date"}
-	cleaned := RemoveDuplicates(data)
-	fmt.Println("Original:", data)
-	fmt.Println("Cleaned:", cleaned)
+	data := []string{"  apple ", "banana", "  apple", "banana ", "", "  cherry  "}
+	cleaned := CleanData(data)
+	fmt.Println("Cleaned data:", cleaned)
 }
