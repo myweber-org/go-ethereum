@@ -4,13 +4,25 @@ import (
 	"context"
 	"net/http"
 	"strings"
+
+	"github.com/golang-jwt/jwt/v5"
 )
 
 type contextKey string
 
 const userIDKey contextKey = "userID"
 
-func Authenticate(next http.Handler) http.Handler {
+type Authenticator struct {
+	secretKey []byte
+}
+
+func NewAuthenticator(secretKey string) *Authenticator {
+	return &Authenticator{
+		secretKey: []byte(secretKey),
+	}
+}
+
+func (a *Authenticator) Middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		authHeader := r.Header.Get("Authorization")
 		if authHeader == "" {
@@ -24,10 +36,28 @@ func Authenticate(next http.Handler) http.Handler {
 			return
 		}
 
-		token := parts[1]
-		userID, err := validateToken(token)
-		if err != nil {
-			http.Error(w, "Invalid token", http.StatusUnauthorized)
+		tokenStr := parts[1]
+		token, err := jwt.Parse(tokenStr, func(token *jwt.Token) (interface{}, error) {
+			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+				return nil, jwt.ErrSignatureInvalid
+			}
+			return a.secretKey, nil
+		})
+
+		if err != nil || !token.Valid {
+			http.Error(w, "Invalid or expired token", http.StatusUnauthorized)
+			return
+		}
+
+		claims, ok := token.Claims.(jwt.MapClaims)
+		if !ok {
+			http.Error(w, "Invalid token claims", http.StatusUnauthorized)
+			return
+		}
+
+		userID, ok := claims["user_id"].(string)
+		if !ok || userID == "" {
+			http.Error(w, "Invalid user identifier", http.StatusUnauthorized)
 			return
 		}
 
@@ -36,18 +66,7 @@ func Authenticate(next http.Handler) http.Handler {
 	})
 }
 
-func validateToken(token string) (string, error) {
-	// Simplified token validation logic
-	// In production, use proper JWT validation library
-	if token == "valid_token_example" {
-		return "user123", nil
-	}
-	return "", http.ErrNoCookie
-}
-
-func GetUserID(ctx context.Context) string {
-	if userID, ok := ctx.Value(userIDKey).(string); ok {
-		return userID
-	}
-	return ""
+func GetUserID(ctx context.Context) (string, bool) {
+	userID, ok := ctx.Value(userIDKey).(string)
+	return userID, ok
 }
