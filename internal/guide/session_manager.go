@@ -1,66 +1,68 @@
 package session
 
 import (
-	"crypto/rand"
-	"encoding/base64"
-	"errors"
+	"sync"
 	"time"
 )
 
 type Session struct {
 	ID        string
-	UserID    int
+	Data      map[string]interface{}
 	ExpiresAt time.Time
 }
 
 type Manager struct {
-	sessions map[string]Session
+	sessions map[string]*Session
+	mu       sync.RWMutex
+	ttl      time.Duration
 }
 
-func NewManager() *Manager {
-	return &Manager{
-		sessions: make(map[string]Session),
+func NewManager(ttl time.Duration) *Manager {
+	m := &Manager{
+		sessions: make(map[string]*Session),
+		ttl:      ttl,
 	}
+	go m.cleanupRoutine()
+	return m
 }
 
-func (m *Manager) Create(userID int) (string, error) {
-	token, err := generateToken()
-	if err != nil {
-		return "", err
-	}
+func (m *Manager) Create(id string) *Session {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 
-	session := Session{
-		ID:        token,
-		UserID:    userID,
-		ExpiresAt: time.Now().Add(24 * time.Hour),
+	session := &Session{
+		ID:        id,
+		Data:      make(map[string]interface{}),
+		ExpiresAt: time.Now().Add(m.ttl),
 	}
-
-	m.sessions[token] = session
-	return token, nil
+	m.sessions[id] = session
+	return session
 }
 
-func (m *Manager) Validate(token string) (Session, error) {
-	session, exists := m.sessions[token]
-	if !exists {
-		return Session{}, errors.New("session not found")
-	}
+func (m *Manager) Get(id string) *Session {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 
-	if time.Now().After(session.ExpiresAt) {
-		delete(m.sessions, token)
-		return Session{}, errors.New("session expired")
+	if session, exists := m.sessions[id]; exists {
+		if time.Now().Before(session.ExpiresAt) {
+			return session
+		}
 	}
-
-	return session, nil
+	return nil
 }
 
-func (m *Manager) Revoke(token string) {
-	delete(m.sessions, token)
-}
+func (m *Manager) cleanupRoutine() {
+	ticker := time.NewTicker(time.Minute)
+	defer ticker.Stop()
 
-func generateToken() (string, error) {
-	bytes := make([]byte, 32)
-	if _, err := rand.Read(bytes); err != nil {
-		return "", err
+	for range ticker.C {
+		m.mu.Lock()
+		now := time.Now()
+		for id, session := range m.sessions {
+			if now.After(session.ExpiresAt) {
+				delete(m.sessions, id)
+			}
+		}
+		m.mu.Unlock()
 	}
-	return base64.URLEncoding.EncodeToString(bytes), nil
 }
