@@ -268,4 +268,61 @@ func (c *ServerConfig) Validate() error {
         return fmt.Errorf("server port must be between 1 and 65535")
     }
     return nil
+}package config
+
+import (
+	"io/ioutil"
+	"log"
+
+	"gopkg.in/yaml.v2"
+)
+
+type AppConfig struct {
+	Server struct {
+		Host string `yaml:"host"`
+		Port int    `yaml:"port"`
+	} `yaml:"server"`
+	Database struct {
+		Username string `yaml:"username"`
+		Password string `yaml:"password"`
+		Host     string `yaml:"host"`
+		Name     string `yaml:"name"`
+	} `yaml:"database"`
+	LogLevel string `yaml:"log_level"`
+}
+
+func LoadConfig(filename string) (*AppConfig, error) {
+	data, err := ioutil.ReadFile(filename)
+	if err != nil {
+		return nil, err
+	}
+
+	var config AppConfig
+	err = yaml.Unmarshal(data, &config)
+	if err != nil {
+		return nil, err
+	}
+
+	return &config, nil
+}
+
+func DefaultConfig() *AppConfig {
+	config := &AppConfig{}
+	config.Server.Host = "localhost"
+	config.Server.Port = 8080
+	config.Database.Host = "localhost"
+	config.LogLevel = "info"
+	return config
+}
+
+func ValidateConfig(config *AppConfig) bool {
+	if config.Server.Port <= 0 || config.Server.Port > 65535 {
+		log.Printf("Invalid server port: %d", config.Server.Port)
+		return false
+	}
+	if config.LogLevel != "debug" && config.LogLevel != "info" && config.LogLevel != "warn" && config.LogLevel != "error" {
+		log.Printf("Invalid log level: %s", config.LogLevel)
+		return false
+	}
+	return true
 }
