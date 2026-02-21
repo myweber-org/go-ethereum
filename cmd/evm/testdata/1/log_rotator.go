@@ -325,4 +325,68 @@ func main() {
     }
 
     fmt.Println("Log rotation test completed")
+}package main
+
+import (
+    "fmt"
+    "io"
+    "os"
+    "path/filepath"
+    "time"
+)
+
+func rotateLog(sourcePath, backupDir string) error {
+    fileInfo, err := os.Stat(sourcePath)
+    if err != nil {
+        return fmt.Errorf("cannot stat source file: %w", err)
+    }
+
+    if fileInfo.Size() == 0 {
+        return nil
+    }
+
+    timestamp := time.Now().Format("20060102_150405")
+    backupFileName := fmt.Sprintf("%s_%s", filepath.Base(sourcePath), timestamp)
+    backupPath := filepath.Join(backupDir, backupFileName)
+
+    sourceFile, err := os.Open(sourcePath)
+    if err != nil {
+        return fmt.Errorf("cannot open source file: %w", err)
+    }
+    defer sourceFile.Close()
+
+    backupFile, err := os.Create(backupPath)
+    if err != nil {
+        return fmt.Errorf("cannot create backup file: %w", err)
+    }
+    defer backupFile.Close()
+
+    _, err = io.Copy(backupFile, sourceFile)
+    if err != nil {
+        return fmt.Errorf("cannot copy data to backup: %w", err)
+    }
+
+    err = os.Truncate(sourcePath, 0)
+    if err != nil {
+        return fmt.Errorf("cannot truncate source file: %w", err)
+    }
+
+    fmt.Printf("Log rotated successfully: %s -> %s\n", sourcePath, backupPath)
+    return nil
+}
+
+func main() {
+    if len(os.Args) != 3 {
+        fmt.Println("Usage: log_rotator <log_file> <backup_directory>")
+        os.Exit(1)
+    }
+
+    logFile := os.Args[1]
+    backupDir := os.Args[2]
+
+    err := rotateLog(logFile, backupDir)
+    if err != nil {
+        fmt.Printf("Error rotating log: %v\n", err)
+        os.Exit(1)
+    }
 }
