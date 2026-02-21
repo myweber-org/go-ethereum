@@ -101,4 +101,43 @@ func (c *AppConfig) Validate() error {
         return fmt.Errorf("write timeout cannot be negative")
     }
     return nil
+}package config
+
+import (
+    "fmt"
+    "io/ioutil"
+    "gopkg.in/yaml.v2"
+)
+
+type Config struct {
+    Server struct {
+        Port int    `yaml:"port"`
+        Host string `yaml:"host"`
+    } `yaml:"server"`
+    Database struct {
+        Name     string `yaml:"name"`
+        User     string `yaml:"user"`
+        Password string `yaml:"password"`
+    } `yaml:"database"`
+}
+
+func LoadConfig(path string) (*Config, error) {
+    data, err := ioutil.ReadFile(path)
+    if err != nil {
+        return nil, fmt.Errorf("failed to read config file: %w", err)
+    }
+
+    var cfg Config
+    if err := yaml.Unmarshal(data, &cfg); err != nil {
+        return nil, fmt.Errorf("failed to parse YAML: %w", err)
+    }
+
+    if cfg.Server.Port <= 0 {
+        return nil, fmt.Errorf("server port must be positive")
+    }
+    if cfg.Database.Name == "" {
+        return nil, fmt.Errorf("database name is required")
+    }
+
+    return &cfg, nil
 }
