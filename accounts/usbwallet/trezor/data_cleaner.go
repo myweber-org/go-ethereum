@@ -53,3 +53,31 @@ func main() {
 	fmt.Println("Cleaned CSV output:")
 	fmt.Println(output.String())
 }
+package main
+
+import "fmt"
+
+func RemoveDuplicates(nums []int) []int {
+    if len(nums) == 0 {
+        return nums
+    }
+    
+    seen := make(map[int]bool)
+    result := make([]int, 0, len(nums))
+    
+    for _, num := range nums {
+        if !seen[num] {
+            seen[num] = true
+            result = append(result, num)
+        }
+    }
+    
+    return result
+}
+
+func main() {
+    testData := []int{1, 2, 2, 3, 4, 4, 5, 1, 6}
+    cleaned := RemoveDuplicates(testData)
+    fmt.Printf("Original: %v\n", testData)
+    fmt.Printf("Cleaned: %v\n", cleaned)
+}
