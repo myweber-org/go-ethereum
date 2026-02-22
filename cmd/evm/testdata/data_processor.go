@@ -107,4 +107,62 @@ func main() {
     fmt.Printf("Processed %d records\n", len(records))
     fmt.Printf("Average value: %.2f\n", avg)
     fmt.Printf("Variance: %.2f\n", varValue)
+}package data
+
+import (
+	"errors"
+	"regexp"
+	"strings"
+)
+
+type Record struct {
+	ID    string
+	Email string
+	Tags  []string
+}
+
+var emailRegex = regexp.MustCompile(`^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$`)
+
+func ValidateRecord(rec Record) error {
+	if rec.ID == "" {
+		return errors.New("record ID cannot be empty")
+	}
+	if !emailRegex.MatchString(rec.Email) {
+		return errors.New("invalid email format")
+	}
+	if len(rec.Tags) == 0 {
+		return errors.New("at least one tag is required")
+	}
+	return nil
+}
+
+func NormalizeTags(tags []string) []string {
+	unique := make(map[string]struct{})
+	var result []string
+	
+	for _, tag := range tags {
+		normalized := strings.ToLower(strings.TrimSpace(tag))
+		if normalized != "" {
+			if _, exists := unique[normalized]; !exists {
+				unique[normalized] = struct{}{}
+				result = append(result, normalized)
+			}
+		}
+	}
+	return result
+}
+
+func ProcessRecords(records []Record) ([]Record, error) {
+	var processed []Record
+	
+	for _, rec := range records {
+		if err := ValidateRecord(rec); err != nil {
+			return nil, err
+		}
+		
+		rec.Tags = NormalizeTags(rec.Tags)
+		processed = append(processed, rec)
+	}
+	
+	return processed, nil
 }
