@@ -179,3 +179,35 @@ func ProcessDataPipeline(inputFile, outputFile string) error {
 
 	return WriteProcessedData(validRecords, outputFile)
 }
+package main
+
+import (
+	"regexp"
+	"strings"
+)
+
+var (
+	invalidCharRegex = regexp.MustCompile(`[<>"'&;]`)
+	whitespaceRegex  = regexp.MustCompile(`\s+`)
+)
+
+func SanitizeInput(input string) string {
+	if input == "" {
+		return input
+	}
+
+	trimmed := strings.TrimSpace(input)
+	sanitized := invalidCharRegex.ReplaceAllString(trimmed, "")
+	normalized := whitespaceRegex.ReplaceAllString(sanitized, " ")
+
+	return normalized
+}
+
+func ValidateInput(input string, maxLength int) bool {
+	if input == "" || len(input) > maxLength {
+		return false
+	}
+
+	sanitized := SanitizeInput(input)
+	return sanitized == input
+}
