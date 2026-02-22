@@ -93,4 +93,32 @@ func main() {
     logActivity("user123", "login", "Successful authentication")
     logActivity("user456", "file_upload", "uploaded profile.jpg")
     logActivity("user123", "logout", "Session terminated")
+}package middleware
+
+import (
+	"log"
+	"net/http"
+	"time"
+)
+
+type ActivityLogger struct {
+	handler http.Handler
+}
+
+func NewActivityLogger(handler http.Handler) *ActivityLogger {
+	return &ActivityLogger{handler: handler}
+}
+
+func (al *ActivityLogger) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	start := time.Now()
+	al.handler.ServeHTTP(w, r)
+	duration := time.Since(start)
+
+	log.Printf(
+		"Activity: %s %s from %s completed in %v",
+		r.Method,
+		r.URL.Path,
+		r.RemoteAddr,
+		duration,
+	)
 }
