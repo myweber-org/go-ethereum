@@ -1,220 +1,46 @@
-
 package config
 
 import (
-	"errors"
 	"os"
-	"strconv"
 	"strings"
 )
 
-type AppConfig struct {
-	ServerPort int
-	DebugMode  bool
+type Config struct {
 	DatabaseURL string
-	CacheTTL   int
+	APIKey      string
+	LogLevel    string
 }
 
-func LoadConfig() (*AppConfig, error) {
-	cfg := &AppConfig{}
-	
-	portStr := getEnvWithDefault("SERVER_PORT", "8080")
-	port, err := strconv.Atoi(portStr)
+func LoadConfig(path string) (*Config, error) {
+	data, err := os.ReadFile(path)
 	if err != nil {
-		return nil, errors.New("invalid SERVER_PORT value")
-	}
-	cfg.ServerPort = port
-	
-	debugStr := getEnvWithDefault("DEBUG_MODE", "false")
-	cfg.DebugMode = strings.ToLower(debugStr) == "true"
-	
-	cfg.DatabaseURL = getEnvWithDefault("DATABASE_URL", "postgres://localhost:5432/appdb")
-	
-	ttlStr := getEnvWithDefault("CACHE_TTL", "300")
-	ttl, err := strconv.Atoi(ttlStr)
-	if err != nil {
-		return nil, errors.New("invalid CACHE_TTL value")
-	}
-	cfg.CacheTTL = ttl
-	
-	if err := validateConfig(cfg); err != nil {
 		return nil, err
 	}
-	
-	return cfg, nil
-}
 
-func getEnvWithDefault(key, defaultValue string) string {
-	value := os.Getenv(key)
-	if value == "" {
-		return defaultValue
-	}
-	return value
-}
+	content := string(data)
+	content = os.ExpandEnv(content)
 
-func validateConfig(cfg *AppConfig) error {
-	if cfg.ServerPort < 1 || cfg.ServerPort > 65535 {
-		return errors.New("server port must be between 1 and 65535")
-	}
-	
-	if cfg.DatabaseURL == "" {
-		return errors.New("database URL cannot be empty")
-	}
-	
-	if cfg.CacheTTL < 0 {
-		return errors.New("cache TTL cannot be negative")
-	}
-	
-	return nil
-}package config
-
-import (
-	"errors"
-	"os"
-	"strconv"
-	"strings"
-)
-
-type Config struct {
-	ServerPort int
-	DBHost     string
-	DBPort     int
-	DebugMode  bool
-	APIKeys    []string
-}
-
-func Load() (*Config, error) {
+	lines := strings.Split(content, "\n")
 	cfg := &Config{}
-	var err error
 
-	cfg.ServerPort, err = getIntEnv("SERVER_PORT", 8080)
-	if err != nil {
-		return nil, err
-	}
-
-	cfg.DBHost = getStringEnv("DB_HOST", "localhost")
-	
-	cfg.DBPort, err = getIntEnv("DB_PORT", 5432)
-	if err != nil {
-		return nil, err
-	}
-
-	cfg.DebugMode = getBoolEnv("DEBUG_MODE", false)
-	
-	apiKeysStr := getStringEnv("API_KEYS", "")
-	if apiKeysStr != "" {
-		cfg.APIKeys = strings.Split(apiKeysStr, ",")
-		for i, key := range cfg.APIKeys {
-			cfg.APIKeys[i] = strings.TrimSpace(key)
+	for _, line := range lines {
+		parts := strings.SplitN(line, "=", 2)
+		if len(parts) != 2 {
+			continue
 		}
-	}
 
-	if cfg.ServerPort < 1 || cfg.ServerPort > 65535 {
-		return nil, errors.New("invalid server port range")
-	}
+		key := strings.TrimSpace(parts[0])
+		value := strings.TrimSpace(parts[1])
 
-	if cfg.DBPort < 1 || cfg.DBPort > 65535 {
-		return nil, errors.New("invalid database port range")
+		switch key {
+		case "DATABASE_URL":
+			cfg.DatabaseURL = value
+		case "API_KEY":
+			cfg.APIKey = value
+		case "LOG_LEVEL":
+			cfg.LogLevel = value
+		}
 	}
 
 	return cfg, nil
-}
-
-func getStringEnv(key, defaultValue string) string {
-	if value := os.Getenv(key); value != "" {
-		return value
-	}
-	return defaultValue
-}
-
-func getIntEnv(key string, defaultValue int) (int, error) {
-	if value := os.Getenv(key); value != "" {
-		intValue, err := strconv.Atoi(value)
-		if err != nil {
-			return 0, errors.New("invalid integer value for " + key)
-		}
-		return intValue, nil
-	}
-	return defaultValue, nil
-}
-
-func getBoolEnv(key string, defaultValue bool) bool {
-	if value := os.Getenv(key); value != "" {
-		boolValue, err := strconv.ParseBool(value)
-		if err != nil {
-			return defaultValue
-		}
-		return boolValue
-	}
-	return defaultValue
-}package config
-
-import (
-	"os"
-	"path/filepath"
-
-	"gopkg.in/yaml.v3"
-)
-
-type Config struct {
-	Server struct {
-		Host string `yaml:"host"`
-		Port int    `yaml:"port"`
-	} `yaml:"server"`
-	Database struct {
-		Host     string `yaml:"host"`
-		Port     int    `yaml:"port"`
-		Username string `yaml:"username"`
-		Password string `yaml:"password"`
-		Name     string `yaml:"name"`
-	} `yaml:"database"`
-	Logging struct {
-		Level  string `yaml:"level"`
-		Output string `yaml:"output"`
-	} `yaml:"logging"`
-}
-
-func LoadConfig(configPath string) (*Config, error) {
-	absPath, err := filepath.Abs(configPath)
-	if err != nil {
-		return nil, err
-	}
-
-	data, err := os.ReadFile(absPath)
-	if err != nil {
-		return nil, err
-	}
-
-	var cfg Config
-	if err := yaml.Unmarshal(data, &cfg); err != nil {
-		return nil, err
-	}
-
-	overrideFromEnv(&cfg)
-	return &cfg, nil
-}
-
-func overrideFromEnv(cfg *Config) {
-	if host := os.Getenv("DB_HOST"); host != "" {
-		cfg.Database.Host = host
-	}
-	if port := os.Getenv("DB_PORT"); port != "" {
-		cfg.Database.Port = atoi(port)
-	}
-	if user := os.Getenv("DB_USER"); user != "" {
-		cfg.Database.Username = user
-	}
-	if pass := os.Getenv("DB_PASS"); pass != "" {
-		cfg.Database.Password = pass
-	}
-}
-
-func atoi(s string) int {
-	var result int
-	for _, ch := range s {
-		if ch >= '0' && ch <= '9' {
-			result = result*10 + int(ch-'0')
-		}
-	}
-	return result
 }
