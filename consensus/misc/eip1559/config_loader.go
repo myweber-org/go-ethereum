@@ -78,4 +78,80 @@ func overrideFromEnv(config *AppConfig) {
     if val := os.Getenv("SERVER_WRITE_TIMEOUT"); val != "" {
         fmt.Sscanf(val, "%d", &config.Server.WriteTimeout)
     }
+}package config
+
+import (
+	"errors"
+	"os"
+	"path/filepath"
+
+	"gopkg.in/yaml.v3"
+)
+
+type Config struct {
+	Server struct {
+		Host string `yaml:"host" env:"SERVER_HOST"`
+		Port int    `yaml:"port" env:"SERVER_PORT"`
+	} `yaml:"server"`
+	Database struct {
+		Host     string `yaml:"host" env:"DB_HOST"`
+		Port     int    `yaml:"port" env:"DB_PORT"`
+		Name     string `yaml:"name" env:"DB_NAME"`
+		Username string `yaml:"username" env:"DB_USER"`
+		Password string `yaml:"password" env:"DB_PASS"`
+	} `yaml:"database"`
+	LogLevel string `yaml:"log_level" env:"LOG_LEVEL"`
+}
+
+func LoadConfig(configPath string) (*Config, error) {
+	if configPath == "" {
+		configPath = "config.yaml"
+	}
+
+	absPath, err := filepath.Abs(configPath)
+	if err != nil {
+		return nil, err
+	}
+
+	data, err := os.ReadFile(absPath)
+	if err != nil {
+		return nil, err
+	}
+
+	var cfg Config
+	if err := yaml.Unmarshal(data, &cfg); err != nil {
+		return nil, err
+	}
+
+	if err := cfg.loadEnvOverrides(); err != nil {
+		return nil, err
+	}
+
+	if err := cfg.validate(); err != nil {
+		return nil, err
+	}
+
+	return &cfg, nil
+}
+
+func (c *Config) loadEnvOverrides() error {
+	// Implementation would read environment variables
+	// and override YAML values if env vars are set
+	return nil
+}
+
+func (c *Config) validate() error {
+	if c.Server.Port <= 0 || c.Server.Port > 65535 {
+		return errors.New("server port must be between 1 and 65535")
+	}
+
+	if c.Database.Host == "" {
+		return errors.New("database host is required")
+	}
+
+	if c.Database.Name == "" {
+		return errors.New("database name is required")
+	}
+
+	return nil
 }
