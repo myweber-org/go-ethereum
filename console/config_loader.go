@@ -1,46 +1,64 @@
 package config
 
 import (
-	"os"
-	"strings"
+    "errors"
+    "io/ioutil"
+    "gopkg.in/yaml.v2"
 )
 
-type Config struct {
-	DatabaseURL string
-	APIKey      string
-	Debug       bool
+type DatabaseConfig struct {
+    Host     string `yaml:"host"`
+    Port     int    `yaml:"port"`
+    Username string `yaml:"username"`
+    Password string `yaml:"password"`
+    Database string `yaml:"database"`
 }
 
-func LoadConfig(path string) (*Config, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil, err
-	}
+type ServerConfig struct {
+    Port         int            `yaml:"port"`
+    ReadTimeout  int            `yaml:"read_timeout"`
+    WriteTimeout int            `yaml:"write_timeout"`
+    Database     DatabaseConfig `yaml:"database"`
+}
 
-	content := string(data)
-	content = os.ExpandEnv(content)
+func LoadConfig(path string) (*ServerConfig, error) {
+    if path == "" {
+        return nil, errors.New("config path cannot be empty")
+    }
 
-	lines := strings.Split(content, "\n")
-	cfg := &Config{}
+    data, err := ioutil.ReadFile(path)
+    if err != nil {
+        return nil, err
+    }
 
-	for _, line := range lines {
-		parts := strings.SplitN(line, "=", 2)
-		if len(parts) != 2 {
-			continue
-		}
+    var config ServerConfig
+    if err := yaml.Unmarshal(data, &config); err != nil {
+        return nil, err
+    }
 
-		key := strings.TrimSpace(parts[0])
-		value := strings.TrimSpace(parts[1])
+    if err := validateConfig(&config); err != nil {
+        return nil, err
+    }
 
-		switch key {
-		case "DATABASE_URL":
-			cfg.DatabaseURL = value
-		case "API_KEY":
-			cfg.APIKey = value
-		case "DEBUG":
-			cfg.Debug = value == "true"
-		}
-	}
+    return &config, nil
+}
 
-	return cfg, nil
+func validateConfig(config *ServerConfig) error {
+    if config.Port <= 0 || config.Port > 65535 {
+        return errors.New("invalid server port")
+    }
+
+    if config.Database.Host == "" {
+        return errors.New("database host is required")
+    }
+
+    if config.Database.Port <= 0 || config.Database.Port > 65535 {
+        return errors.New("invalid database port")
+    }
+
+    if config.Database.Database == "" {
+        return errors.New("database name is required")
+    }
+
+    return nil
 }
