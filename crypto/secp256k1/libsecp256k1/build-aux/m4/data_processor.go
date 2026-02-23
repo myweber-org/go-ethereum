@@ -153,3 +153,143 @@ func (dp *DataProcessor) ProcessUserData(name, email string) (string, bool) {
 	processedData := sanitizedName + "|" + sanitizedEmail
 	return processedData, true
 }
+package main
+
+import (
+    "encoding/csv"
+    "errors"
+    "fmt"
+    "io"
+    "os"
+    "strconv"
+    "strings"
+)
+
+type DataRecord struct {
+    ID      int
+    Name    string
+    Value   float64
+    Active  bool
+}
+
+func ParseCSVFile(filename string) ([]DataRecord, error) {
+    file, err := os.Open(filename)
+    if err != nil {
+        return nil, fmt.Errorf("failed to open file: %w", err)
+    }
+    defer file.Close()
+
+    reader := csv.NewReader(file)
+    records := make([]DataRecord, 0)
+    lineNum := 0
+
+    for {
+        line, err := reader.Read()
+        if err == io.EOF {
+            break
+        }
+        if err != nil {
+            return nil, fmt.Errorf("csv read error at line %d: %w", lineNum, err)
+        }
+
+        if lineNum == 0 {
+            lineNum++
+            continue
+        }
+
+        record, err := parseCSVLine(line, lineNum)
+        if err != nil {
+            return nil, err
+        }
+
+        if validateRecord(record) {
+            records = append(records, record)
+        }
+
+        lineNum++
+    }
+
+    if len(records) == 0 {
+        return nil, errors.New("no valid records found in file")
+    }
+
+    return records, nil
+}
+
+func parseCSVLine(fields []string, lineNum int) (DataRecord, error) {
+    if len(fields) != 4 {
+        return DataRecord{}, fmt.Errorf("invalid field count at line %d: expected 4, got %d", lineNum, len(fields))
+    }
+
+    id, err := strconv.Atoi(strings.TrimSpace(fields[0]))
+    if err != nil {
+        return DataRecord{}, fmt.Errorf("invalid ID at line %d: %w", lineNum, err)
+    }
+
+    name := strings.TrimSpace(fields[1])
+    if name == "" {
+        return DataRecord{}, fmt.Errorf("empty name at line %d", lineNum)
+    }
+
+    value, err := strconv.ParseFloat(strings.TrimSpace(fields[2]), 64)
+    if err != nil {
+        return DataRecord{}, fmt.Errorf("invalid value at line %d: %w", lineNum, err)
+    }
+
+    active, err := strconv.ParseBool(strings.TrimSpace(fields[3]))
+    if err != nil {
+        return DataRecord{}, fmt.Errorf("invalid active flag at line %d: %w", lineNum, err)
+    }
+
+    return DataRecord{
+        ID:     id,
+        Name:   name,
+        Value:  value,
+        Active: active,
+    }, nil
+}
+
+func validateRecord(record DataRecord) bool {
+    if record.ID <= 0 {
+        return false
+    }
+    if record.Value < 0 {
+        return false
+    }
+    return true
+}
+
+func CalculateStats(records []DataRecord) (float64, float64, int) {
+    if len(records) == 0 {
+        return 0, 0, 0
+    }
+
+    var sum float64
+    activeCount := 0
+
+    for _, record := range records {
+        sum += record.Value
+        if record.Active {
+            activeCount++
+        }
+    }
+
+    average := sum / float64(len(records))
+    return sum, average, activeCount
+}
+
+func FilterRecords(records []DataRecord, minValue float64, activeOnly bool) []DataRecord {
+    filtered := make([]DataRecord, 0)
+
+    for _, record := range records {
+        if record.Value < minValue {
+            continue
+        }
+        if activeOnly && !record.Active {
+            continue
+        }
+        filtered = append(filtered, record)
+    }
+
+    return filtered
+}
