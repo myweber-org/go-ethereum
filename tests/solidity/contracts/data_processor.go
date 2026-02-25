@@ -255,4 +255,58 @@ func ProcessUserInput(rawUsername string, rawEmail string, rawAge int) (UserData
 	}
 
 	return userData, nil
+}package main
+
+import (
+	"errors"
+	"strings"
+	"time"
+)
+
+type DataRecord struct {
+	ID        string
+	Timestamp time.Time
+	Value     float64
+	Tags      []string
+}
+
+func ValidateRecord(record DataRecord) error {
+	if record.ID == "" {
+		return errors.New("record ID cannot be empty")
+	}
+	if record.Value < 0 {
+		return errors.New("record value must be non-negative")
+	}
+	if record.Timestamp.After(time.Now()) {
+		return errors.New("record timestamp cannot be in the future")
+	}
+	return nil
+}
+
+func TransformTags(record DataRecord) DataRecord {
+	transformed := record
+	transformed.Tags = make([]string, len(record.Tags))
+	for i, tag := range record.Tags {
+		transformed.Tags[i] = strings.ToUpper(strings.TrimSpace(tag))
+	}
+	return transformed
+}
+
+func ProcessRecord(record DataRecord) (DataRecord, error) {
+	if err := ValidateRecord(record); err != nil {
+		return DataRecord{}, err
+	}
+	transformed := TransformTags(record)
+	return transformed, nil
+}
+
+func CalculateAverage(records []DataRecord) float64 {
+	if len(records) == 0 {
+		return 0.0
+	}
+	var sum float64
+	for _, record := range records {
+		sum += record.Value
+	}
+	return sum / float64(len(records))
 }
