@@ -142,4 +142,63 @@ func overrideBool(field *bool, envVar string) {
     if val := os.Getenv(envVar); val != "" {
         *field = val == "true" || val == "1" || val == "yes"
     }
+}package config
+
+import (
+	"encoding/json"
+	"fmt"
+	"os"
+	"reflect"
+	"strings"
+)
+
+type Config struct {
+	ServerPort string `env:"SERVER_PORT" default:"8080"`
+	DBHost     string `env:"DB_HOST" default:"localhost"`
+	DBPort     string `env:"DB_PORT" default:"5432"`
+	DBName     string `env:"DB_NAME" default:"appdb"`
+	DebugMode  bool   `env:"DEBUG_MODE" default:"false"`
+}
+
+func LoadConfig() (*Config, error) {
+	cfg := &Config{}
+	v := reflect.ValueOf(cfg).Elem()
+	t := v.Type()
+
+	for i := 0; i < t.NumField(); i++ {
+		field := t.Field(i)
+		envTag := field.Tag.Get("env")
+		defaultVal := field.Tag.Get("default")
+
+		if envTag == "" {
+			continue
+		}
+
+		envVal := os.Getenv(envTag)
+		if envVal == "" {
+			envVal = defaultVal
+		}
+
+		fieldValue := v.Field(i)
+		if !fieldValue.CanSet() {
+			return nil, fmt.Errorf("cannot set field %s", field.Name)
+		}
+
+		switch field.Type.Kind() {
+		case reflect.String:
+			fieldValue.SetString(envVal)
+		case reflect.Bool:
+			boolVal := strings.ToLower(envVal) == "true"
+			fieldValue.SetBool(boolVal)
+		default:
+			return nil, fmt.Errorf("unsupported field type %s for %s", field.Type.Kind(), field.Name)
+		}
+	}
+
+	return cfg, nil
+}
+
+func (c *Config) String() string {
+	data, _ := json.MarshalIndent(c, "", "  ")
+	return string(data)
 }
