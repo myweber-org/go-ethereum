@@ -1,49 +1,25 @@
 package main
 
 import (
-	"errors"
 	"regexp"
 	"strings"
 )
 
-type UserData struct {
-	Email    string
-	Username string
-	Age      int
+func SanitizeUsername(input string) string {
+	re := regexp.MustCompile(`[^a-zA-Z0-9_-]`)
+	sanitized := re.ReplaceAllString(input, "")
+	return strings.TrimSpace(sanitized)
 }
 
-var emailRegex = regexp.MustCompile(`^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$`)
-
-func ValidateUserData(data UserData) error {
-	if strings.TrimSpace(data.Email) == "" {
-		return errors.New("email cannot be empty")
-	}
-	if !emailRegex.MatchString(data.Email) {
-		return errors.New("invalid email format")
-	}
-	if len(data.Username) < 3 || len(data.Username) > 20 {
-		return errors.New("username must be between 3 and 20 characters")
-	}
-	if data.Age < 18 || data.Age > 120 {
-		return errors.New("age must be between 18 and 120")
-	}
-	return nil
+func ValidateEmail(email string) bool {
+	pattern := `^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$`
+	matched, _ := regexp.MatchString(pattern, email)
+	return matched
 }
 
-func TransformUsername(username string) string {
-	return strings.ToLower(strings.TrimSpace(username))
-}
-
-func ProcessUserInput(email, username string, age int) (UserData, error) {
-	transformedUsername := TransformUsername(username)
-	userData := UserData{
-		Email:    strings.TrimSpace(email),
-		Username: transformedUsername,
-		Age:      age,
+func TruncateString(s string, maxLength int) string {
+	if len(s) <= maxLength {
+		return s
 	}
-	err := ValidateUserData(userData)
-	if err != nil {
-		return UserData{}, err
-	}
-	return userData, nil
+	return s[:maxLength]
 }
