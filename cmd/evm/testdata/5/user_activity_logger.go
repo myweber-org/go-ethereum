@@ -55,3 +55,61 @@ func GetActivityFromContext(ctx context.Context) (UserActivity, bool) {
 	activity, ok := ctx.Value(UserActivityKey).(UserActivity)
 	return activity, ok
 }
+package main
+
+import (
+	"log"
+	"net/http"
+	"time"
+)
+
+type ActivityLog struct {
+	UserID    string
+	Action    string
+	Path      string
+	Timestamp time.Time
+}
+
+var activityLogs []ActivityLog
+
+func loggingMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		userID := r.Header.Get("X-User-ID")
+		if userID == "" {
+			userID = "anonymous"
+		}
+
+		logEntry := ActivityLog{
+			UserID:    userID,
+			Action:    r.Method,
+			Path:      r.URL.Path,
+			Timestamp: time.Now(),
+		}
+
+		activityLogs = append(activityLogs, logEntry)
+		log.Printf("Activity: %s %s by %s", logEntry.Action, logEntry.Path, logEntry.UserID)
+
+		next.ServeHTTP(w, r)
+	})
+}
+
+func getActivityLogs(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	for _, entry := range activityLogs {
+		logLine := entry.Timestamp.Format("2006-01-02 15:04:05") + " - " + entry.UserID + " - " + entry.Action + " " + entry.Path + "\n"
+		w.Write([]byte(logLine))
+	}
+}
+
+func main() {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/admin/logs", getActivityLogs)
+
+	loggedMux := loggingMiddleware(mux)
+
+	log.Println("Server starting on :8080")
+	if err := http.ListenAndServe(":8080", loggedMux); err != nil {
+		log.Fatal(err)
+	}
+}
