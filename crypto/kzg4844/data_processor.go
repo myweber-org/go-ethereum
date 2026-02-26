@@ -102,4 +102,60 @@ func main() {
     fmt.Printf("Processed %d records\n", len(records))
     fmt.Printf("Average: %.2f\n", avg)
     fmt.Printf("Variance: %.2f\n", var)
+}package main
+
+import (
+	"fmt"
+	"strings"
+)
+
+type UserData struct {
+	Username string
+	Email    string
+	Age      int
+}
+
+func ValidateUserData(data UserData) (bool, []string) {
+	var errors []string
+
+	if strings.TrimSpace(data.Username) == "" {
+		errors = append(errors, "username cannot be empty")
+	}
+	if !strings.Contains(data.Email, "@") {
+		errors = append(errors, "email must contain @ symbol")
+	}
+	if data.Age < 0 || data.Age > 150 {
+		errors = append(errors, "age must be between 0 and 150")
+	}
+
+	return len(errors) == 0, errors
+}
+
+func TransformUsername(data *UserData) {
+	data.Username = strings.ToLower(strings.TrimSpace(data.Username))
+}
+
+func ProcessUserInput(username, email string, age int) (UserData, error) {
+	user := UserData{
+		Username: username,
+		Email:    email,
+		Age:      age,
+	}
+
+	TransformUsername(&user)
+
+	if valid, errs := ValidateUserData(user); !valid {
+		return user, fmt.Errorf("validation failed: %v", strings.Join(errs, "; "))
+	}
+
+	return user, nil
+}
+
+func main() {
+	user, err := ProcessUserInput("  JohnDoe  ", "john@example.com", 30)
+	if err != nil {
+		fmt.Printf("Error: %v\n", err)
+		return
+	}
+	fmt.Printf("Processed user: %+v\n", user)
 }
