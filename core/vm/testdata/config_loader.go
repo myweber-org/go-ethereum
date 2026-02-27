@@ -1,53 +1,102 @@
-
 package config
 
 import (
 	"errors"
-	"io"
 	"os"
+	"path/filepath"
 
 	"gopkg.in/yaml.v3"
 )
 
 type Config struct {
 	Server struct {
-		Host string `yaml:"host"`
-		Port int    `yaml:"port"`
+		Host string `yaml:"host" env:"SERVER_HOST"`
+		Port int    `yaml:"port" env:"SERVER_PORT"`
 	} `yaml:"server"`
 	Database struct {
-		Host     string `yaml:"host"`
-		Username string `yaml:"username"`
-		Password string `yaml:"password"`
-		Name     string `yaml:"name"`
+		Host     string `yaml:"host" env:"DB_HOST"`
+		Port     int    `yaml:"port" env:"DB_PORT"`
+		Name     string `yaml:"name" env:"DB_NAME"`
+		User     string `yaml:"user" env:"DB_USER"`
+		Password string `yaml:"password" env:"DB_PASSWORD"`
+		SSLMode  string `yaml:"ssl_mode" env:"DB_SSL_MODE"`
 	} `yaml:"database"`
-	LogLevel string `yaml:"log_level"`
+	Logging struct {
+		Level  string `yaml:"level" env:"LOG_LEVEL"`
+		Output string `yaml:"output" env:"LOG_OUTPUT"`
+	} `yaml:"logging"`
 }
 
-func LoadConfig(path string) (*Config, error) {
-	file, err := os.Open(path)
+func LoadConfig(configPath string) (*Config, error) {
+	if configPath == "" {
+		configPath = "config.yaml"
+	}
+
+	absPath, err := filepath.Abs(configPath)
 	if err != nil {
 		return nil, err
 	}
-	defer file.Close()
 
-	data, err := io.ReadAll(file)
+	data, err := os.ReadFile(absPath)
 	if err != nil {
 		return nil, err
 	}
 
-	var config Config
-	if err := yaml.Unmarshal(data, &config); err != nil {
+	var cfg Config
+	if err := yaml.Unmarshal(data, &cfg); err != nil {
 		return nil, err
 	}
 
-	if err := validateConfig(&config); err != nil {
+	if err := cfg.loadFromEnv(); err != nil {
 		return nil, err
 	}
 
-	return &config, nil
+	if err := cfg.validate(); err != nil {
+		return nil, err
+	}
+
+	return &cfg, nil
 }
 
-func validateConfig(c *Config) error {
+func (c *Config) loadFromEnv() error {
+	loadString := func(field *string, envVar string) {
+		if val := os.Getenv(envVar); val != "" {
+			*field = val
+		}
+	}
+
+	loadInt := func(field *int, envVar string) error {
+		if val := os.Getenv(envVar); val != "" {
+			var intVal int
+			if _, err := fmt.Sscanf(val, "%d", &intVal); err != nil {
+				return err
+			}
+			*field = intVal
+		}
+		return nil
+	}
+
+	loadString(&c.Server.Host, "SERVER_HOST")
+	if err := loadInt(&c.Server.Port, "SERVER_PORT"); err != nil {
+		return err
+	}
+
+	loadString(&c.Database.Host, "DB_HOST")
+	if err := loadInt(&c.Database.Port, "DB_PORT"); err != nil {
+		return err
+	}
+	loadString(&c.Database.Name, "DB_NAME")
+	loadString(&c.Database.User, "DB_USER")
+	loadString(&c.Database.Password, "DB_PASSWORD")
+	loadString(&c.Database.SSLMode, "DB_SSL_MODE")
+
+	loadString(&c.Logging.Level, "LOG_LEVEL")
+	loadString(&c.Logging.Output, "LOG_OUTPUT")
+
+	return nil
+}
+
+func (c *Config) validate() error {
 	if c.Server.Host == "" {
 		return errors.New("server host cannot be empty")
 	}
@@ -57,8 +106,8 @@ func validateConfig(c *Config) error {
 	if c.Database.Host == "" {
 		return errors.New("database host cannot be empty")
 	}
-	if c.LogLevel == "" {
-		c.LogLevel = "info"
+	if c.Database.Name == "" {
+		return errors.New("database name cannot be empty")
 	}
 	return nil
 }
