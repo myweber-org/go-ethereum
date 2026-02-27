@@ -1,32 +1,60 @@
-package csvutil
+package main
 
 import (
+	"fmt"
 	"strings"
 )
 
-func SanitizeCSVRow(row []string) []string {
-	sanitized := make([]string, len(row))
-	for i, cell := range row {
-		sanitized[i] = strings.TrimSpace(cell)
-	}
-	return sanitized
+type DataCleaner struct {
+	seen map[string]bool
 }
 
-func RemoveEmptyRows(rows [][]string) [][]string {
-	var filtered [][]string
-	for _, row := range rows {
-		if !isEmptyRow(row) {
-			filtered = append(filtered, row)
-		}
+func NewDataCleaner() *DataCleaner {
+	return &DataCleaner{
+		seen: make(map[string]bool),
 	}
-	return filtered
 }
 
-func isEmptyRow(row []string) bool {
-	for _, cell := range row {
-		if strings.TrimSpace(cell) != "" {
-			return false
+func (dc *DataCleaner) Normalize(input string) string {
+	return strings.ToLower(strings.TrimSpace(input))
+}
+
+func (dc *DataCleaner) IsDuplicate(value string) bool {
+	normalized := dc.Normalize(value)
+	if dc.seen[normalized] {
+		return true
+	}
+	dc.seen[normalized] = true
+	return false
+}
+
+func (dc *DataCleaner) ProcessBatch(items []string) []string {
+	var unique []string
+	for _, item := range items {
+		if !dc.IsDuplicate(item) {
+			unique = append(unique, item)
 		}
 	}
-	return true
+	return unique
+}
+
+func (dc *DataCleaner) Reset() {
+	dc.seen = make(map[string]bool)
+}
+
+func main() {
+	cleaner := NewDataCleaner()
+	
+	data := []string{"Apple", "apple ", " BANANA", "banana", "Cherry"}
+	
+	fmt.Println("Original data:", data)
+	
+	cleaned := cleaner.ProcessBatch(data)
+	fmt.Println("Cleaned data:", cleaned)
+	
+	cleaner.Reset()
+	
+	moreData := []string{"grape", "GRAPE", "orange"}
+	secondBatch := cleaner.ProcessBatch(moreData)
+	fmt.Println("Second batch:", secondBatch)
 }
