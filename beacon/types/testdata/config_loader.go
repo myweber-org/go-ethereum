@@ -1,67 +1,67 @@
 package config
 
 import (
-	"os"
-	"strconv"
-	"strings"
+    "fmt"
+    "io/ioutil"
+    "os"
+
+    "gopkg.in/yaml.v2"
 )
 
-type Config struct {
-	ServerPort int
-	DBHost     string
-	DBPort     int
-	DebugMode  bool
-	FeatureFlags []string
+type DatabaseConfig struct {
+    Host     string `yaml:"host"`
+    Port     int    `yaml:"port"`
+    Username string `yaml:"username"`
+    Password string `yaml:"password"`
+    Name     string `yaml:"name"`
 }
 
-func LoadConfig() (*Config, error) {
-	cfg := &Config{}
-	
-	port, err := getEnvInt("SERVER_PORT", 8080)
-	if err != nil {
-		return nil, err
-	}
-	cfg.ServerPort = port
-	
-	cfg.DBHost = getEnvString("DB_HOST", "localhost")
-	
-	dbPort, err := getEnvInt("DB_PORT", 5432)
-	if err != nil {
-		return nil, err
-	}
-	cfg.DBPort = dbPort
-	
-	debug, err := getEnvBool("DEBUG_MODE", false)
-	if err != nil {
-		return nil, err
-	}
-	cfg.DebugMode = debug
-	
-	flags := getEnvString("FEATURE_FLAGS", "")
-	if flags != "" {
-		cfg.FeatureFlags = strings.Split(flags, ",")
-	}
-	
-	return cfg, nil
+type ServerConfig struct {
+    Port         int            `yaml:"port"`
+    ReadTimeout  int            `yaml:"read_timeout"`
+    WriteTimeout int            `yaml:"write_timeout"`
+    Database     DatabaseConfig `yaml:"database"`
 }
 
-func getEnvString(key, defaultValue string) string {
-	if value, exists := os.LookupEnv(key); exists {
-		return value
-	}
-	return defaultValue
+func LoadConfig(path string) (*ServerConfig, error) {
+    file, err := os.Open(path)
+    if err != nil {
+        return nil, fmt.Errorf("failed to open config file: %w", err)
+    }
+    defer file.Close()
+
+    data, err := ioutil.ReadAll(file)
+    if err != nil {
+        return nil, fmt.Errorf("failed to read config file: %w", err)
+    }
+
+    var config ServerConfig
+    if err := yaml.Unmarshal(data, &config); err != nil {
+        return nil, fmt.Errorf("failed to parse YAML: %w", err)
+    }
+
+    if config.Port == 0 {
+        config.Port = 8080
+    }
+    if config.ReadTimeout == 0 {
+        config.ReadTimeout = 30
+    }
+    if config.WriteTimeout == 0 {
+        config.WriteTimeout = 30
+    }
+
+    return &config, nil
 }
 
-func getEnvInt(key string, defaultValue int) (int, error) {
-	if value, exists := os.LookupEnv(key); exists {
-		return strconv.Atoi(value)
-	}
-	return defaultValue, nil
-}
-
-func getEnvBool(key string, defaultValue bool) (bool, error) {
-	if value, exists := os.LookupEnv(key); exists {
-		return strconv.ParseBool(value)
-	}
-	return defaultValue, nil
+func ValidateConfig(config *ServerConfig) error {
+    if config.Database.Host == "" {
+        return fmt.Errorf("database host is required")
+    }
+    if config.Database.Port == 0 {
+        return fmt.Errorf("database port is required")
+    }
+    if config.Database.Name == "" {
+        return fmt.Errorf("database name is required")
+    }
+    return nil
 }
