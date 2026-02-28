@@ -60,3 +60,25 @@ func ProcessRecords(records []DataRecord, multiplier float64) ([]DataRecord, []e
 
 	return processed, errs
 }
+package data_processor
+
+import (
+	"regexp"
+	"strings"
+)
+
+func CleanInput(input string) string {
+	trimmed := strings.TrimSpace(input)
+	re := regexp.MustCompile(`\s+`)
+	cleaned := re.ReplaceAllString(trimmed, " ")
+	return cleaned
+}
+
+func NormalizeCase(input string) string {
+	return strings.ToLower(input)
+}
+
+func RemoveSpecialChars(input string) string {
+	re := regexp.MustCompile(`[^a-zA-Z0-9\s]`)
+	return re.ReplaceAllString(input, "")
+}
