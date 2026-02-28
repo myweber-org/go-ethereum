@@ -1,43 +1,54 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
-	"log"
+	"strings"
 )
 
-// ValidateJSON checks if the provided byte slice contains valid JSON.
-func ValidateJSON(data []byte) (bool, error) {
-	var js interface{}
-	err := json.Unmarshal(data, &js)
-	if err != nil {
-		return false, fmt.Errorf("invalid JSON: %w", err)
-	}
-	return true, nil
+type UserData struct {
+	Username string
+	Email    string
+	Age      int
 }
 
-// ParseJSONToMap parses JSON data into a map[string]interface{}.
-func ParseJSONToMap(data []byte) (map[string]interface{}, error) {
-	var result map[string]interface{}
-	err := json.Unmarshal(data, &result)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse JSON: %w", err)
+func ValidateUserData(data UserData) error {
+	if strings.TrimSpace(data.Username) == "" {
+		return fmt.Errorf("username cannot be empty")
 	}
-	return result, nil
+	if !strings.Contains(data.Email, "@") {
+		return fmt.Errorf("invalid email format")
+	}
+	if data.Age < 0 || data.Age > 150 {
+		return fmt.Errorf("age must be between 0 and 150")
+	}
+	return nil
+}
+
+func TransformUsername(data *UserData) {
+	data.Username = strings.ToLower(strings.TrimSpace(data.Username))
+}
+
+func ProcessUserInput(username, email string, age int) (UserData, error) {
+	user := UserData{
+		Username: username,
+		Email:    email,
+		Age:      age,
+	}
+
+	TransformUsername(&user)
+
+	if err := ValidateUserData(user); err != nil {
+		return UserData{}, err
+	}
+
+	return user, nil
 }
 
 func main() {
-	jsonData := `{"name": "test", "value": 42, "active": true}`
-
-	valid, err := ValidateJSON([]byte(jsonData))
+	user, err := ProcessUserInput("  JohnDoe  ", "john@example.com", 30)
 	if err != nil {
-		log.Fatalf("Validation error: %v", err)
+		fmt.Printf("Error: %v\n", err)
+		return
 	}
-	fmt.Printf("JSON is valid: %v\n", valid)
-
-	parsedMap, err := ParseJSONToMap([]byte(jsonData))
-	if err != nil {
-		log.Fatalf("Parse error: %v", err)
-	}
-	fmt.Printf("Parsed data: %v\n", parsedMap)
+	fmt.Printf("Processed user: %+v\n", user)
 }
