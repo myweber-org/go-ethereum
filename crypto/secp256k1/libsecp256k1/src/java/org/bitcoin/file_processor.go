@@ -67,3 +67,58 @@ func main() {
 		fmt.Printf("%s: %d lines\n", file, count)
 	}
 }
+package main
+
+import (
+	"encoding/csv"
+	"fmt"
+	"io"
+	"os"
+	"sync"
+)
+
+type RecordProcessor struct {
+	mu       sync.Mutex
+	processed int
+}
+
+func (rp *RecordProcessor) Process(record []string) {
+	rp.mu.Lock()
+	defer rp.mu.Unlock()
+	
+	rp.processed++
+	fmt.Printf("Processing record %d: %v\n", rp.processed, record)
+}
+
+func main() {
+	file, err := os.Open("data.csv")
+	if err != nil {
+		fmt.Printf("Error opening file: %v\n", err)
+		return
+	}
+	defer file.Close()
+
+	reader := csv.NewReader(file)
+	processor := &RecordProcessor{}
+	var wg sync.WaitGroup
+
+	for {
+		record, err := reader.Read()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			fmt.Printf("Error reading CSV: %v\n", err)
+			continue
+		}
+
+		wg.Add(1)
+		go func(r []string) {
+			defer wg.Done()
+			processor.Process(r)
+		}(record)
+	}
+
+	wg.Wait()
+	fmt.Printf("Total records processed: %d\n", processor.processed)
+}
