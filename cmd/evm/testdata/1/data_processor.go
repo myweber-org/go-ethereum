@@ -152,3 +152,29 @@ func main() {
 		os.Exit(1)
 	}
 }
+package data_processor
+
+import (
+	"regexp"
+	"strings"
+)
+
+func SanitizeInput(input string) (string, error) {
+	if input == "" {
+		return "", nil
+	}
+
+	trimmed := strings.TrimSpace(input)
+
+	pattern := `^[a-zA-Z0-9\s\-_\.]+$`
+	matched, err := regexp.MatchString(pattern, trimmed)
+	if err != nil {
+		return "", err
+	}
+
+	if !matched {
+		return "", nil
+	}
+
+	return trimmed, nil
+}
