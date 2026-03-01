@@ -153,3 +153,114 @@ func ProcessUserInput(rawUsername, rawEmail string, rawAge int) (UserData, error
 
 	return userData, nil
 }
+package main
+
+import (
+	"encoding/csv"
+	"fmt"
+	"io"
+	"os"
+	"strings"
+)
+
+type DataRecord struct {
+	ID      string
+	Name    string
+	Email   string
+	Active  string
+}
+
+func ProcessCSVFile(filename string) ([]DataRecord, error) {
+	file, err := os.Open(filename)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open file: %w", err)
+	}
+	defer file.Close()
+
+	reader := csv.NewReader(file)
+	reader.TrimLeadingSpace = true
+
+	var records []DataRecord
+	headerSkipped := false
+
+	for {
+		row, err := reader.Read()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return nil, fmt.Errorf("csv read error: %w", err)
+		}
+
+		if !headerSkipped {
+			headerSkipped = true
+			continue
+		}
+
+		if len(row) < 4 {
+			continue
+		}
+
+		record := DataRecord{
+			ID:     strings.TrimSpace(row[0]),
+			Name:   strings.TrimSpace(row[1]),
+			Email:  strings.TrimSpace(row[2]),
+			Active: strings.TrimSpace(row[3]),
+		}
+
+		if record.ID == "" || record.Name == "" {
+			continue
+		}
+
+		records = append(records, record)
+	}
+
+	return records, nil
+}
+
+func ValidateRecords(records []DataRecord) (valid []DataRecord, invalid []DataRecord) {
+	for _, record := range records {
+		if isValidEmail(record.Email) && isValidStatus(record.Active) {
+			valid = append(valid, record)
+		} else {
+			invalid = append(invalid, record)
+		}
+	}
+	return valid, invalid
+}
+
+func isValidEmail(email string) bool {
+	return strings.Contains(email, "@") && strings.Contains(email, ".")
+}
+
+func isValidStatus(status string) bool {
+	status = strings.ToLower(status)
+	return status == "true" || status == "false" || status == "yes" || status == "no"
+}
+
+func main() {
+	if len(os.Args) < 2 {
+		fmt.Println("Usage: data_processor <csv_file>")
+		os.Exit(1)
+	}
+
+	records, err := ProcessCSVFile(os.Args[1])
+	if err != nil {
+		fmt.Printf("Error processing file: %v\n", err)
+		os.Exit(1)
+	}
+
+	valid, invalid := ValidateRecords(records)
+
+	fmt.Printf("Total records processed: %d\n", len(records))
+	fmt.Printf("Valid records: %d\n", len(valid))
+	fmt.Printf("Invalid records: %d\n", len(invalid))
+
+	if len(invalid) > 0 {
+		fmt.Println("\nInvalid records:")
+		for _, record := range invalid {
+			fmt.Printf("ID: %s, Name: %s, Email: %s, Status: %s\n",
+				record.ID, record.Name, record.Email, record.Active)
+		}
+	}
+}
