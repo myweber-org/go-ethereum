@@ -1,48 +1,58 @@
-
 package main
 
 import (
-    "encoding/json"
-    "fmt"
-    "strings"
+	"errors"
+	"regexp"
+	"strings"
+	"time"
 )
 
-type UserData struct {
-    Email     string `json:"email"`
-    Username  string `json:"username"`
-    Age       int    `json:"age"`
+type UserProfile struct {
+	ID        int
+	Email     string
+	Username  string
+	BirthDate string
+	CreatedAt time.Time
 }
 
-func ValidateAndTransform(data []byte) (*UserData, error) {
-    var user UserData
-    if err := json.Unmarshal(data, &user); err != nil {
-        return nil, fmt.Errorf("invalid json format: %w", err)
-    }
+var emailRegex = regexp.MustCompile(`^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$`)
 
-    user.Email = strings.TrimSpace(strings.ToLower(user.Email))
-    user.Username = strings.TrimSpace(user.Username)
-
-    if user.Age < 0 || user.Age > 150 {
-        return nil, fmt.Errorf("age %d is out of valid range", user.Age)
-    }
-
-    if !strings.Contains(user.Email, "@") {
-        return nil, fmt.Errorf("email %s is invalid", user.Email)
-    }
-
-    if len(user.Username) == 0 {
-        return nil, fmt.Errorf("username cannot be empty")
-    }
-
-    return &user, nil
+func ValidateEmail(email string) error {
+	if !emailRegex.MatchString(email) {
+		return errors.New("invalid email format")
+	}
+	return nil
 }
 
-func main() {
-    jsonData := []byte(`{"email": "TEST@EXAMPLE.COM  ", "username": "  john_doe  ", "age": 25}`)
-    processed, err := ValidateAndTransform(jsonData)
-    if err != nil {
-        fmt.Println("Error:", err)
-        return
-    }
-    fmt.Printf("Processed: %+v\n", processed)
+func SanitizeUsername(username string) string {
+	return strings.TrimSpace(username)
+}
+
+func CalculateAge(birthDate string) (int, error) {
+	parsedDate, err := time.Parse("2006-01-02", birthDate)
+	if err != nil {
+		return 0, errors.New("invalid date format, expected YYYY-MM-DD")
+	}
+
+	age := time.Since(parsedDate).Hours() / 24 / 365.25
+	return int(age), nil
+}
+
+func ProcessUserProfile(profile UserProfile) (UserProfile, error) {
+	if err := ValidateEmail(profile.Email); err != nil {
+		return profile, err
+	}
+
+	profile.Username = SanitizeUsername(profile.Username)
+
+	age, err := CalculateAge(profile.BirthDate)
+	if err != nil {
+		return profile, err
+	}
+
+	if age < 13 {
+		return profile, errors.New("user must be at least 13 years old")
+	}
+
+	return profile, nil
 }
