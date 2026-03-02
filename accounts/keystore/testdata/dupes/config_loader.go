@@ -1,105 +1,98 @@
 package config
 
 import (
-	"os"
-	"strconv"
-	"strings"
+    "fmt"
+    "io/ioutil"
+    "os"
+
+    "gopkg.in/yaml.v2"
 )
 
+type DatabaseConfig struct {
+    Host     string `yaml:"host"`
+    Port     int    `yaml:"port"`
+    Username string `yaml:"username"`
+    Password string `yaml:"password"`
+    Name     string `yaml:"name"`
+}
+
+type ServerConfig struct {
+    Port int    `yaml:"port"`
+    Mode string `yaml:"mode"`
+}
+
 type AppConfig struct {
-	ServerPort int
-	DBHost     string
-	DBPort     int
-	DebugMode  bool
-	FeatureFlags map[string]bool
+    Database DatabaseConfig `yaml:"database"`
+    Server   ServerConfig   `yaml:"server"`
+    LogLevel string         `yaml:"log_level"`
 }
 
-func LoadConfig() (*AppConfig, error) {
-	cfg := &AppConfig{
-		ServerPort: getEnvAsInt("SERVER_PORT", 8080),
-		DBHost:     getEnv("DB_HOST", "localhost"),
-		DBPort:     getEnvAsInt("DB_PORT", 5432),
-		DebugMode:  getEnvAsBool("DEBUG_MODE", false),
-		FeatureFlags: parseFeatureFlags(getEnv("FEATURE_FLAGS", "")),
-	}
+func LoadConfig(configPath string) (*AppConfig, error) {
+    if configPath == "" {
+        configPath = "config.yaml"
+    }
 
-	if err := validateConfig(cfg); err != nil {
-		return nil, err
-	}
+    file, err := os.Open(configPath)
+    if err != nil {
+        return nil, fmt.Errorf("failed to open config file: %w", err)
+    }
+    defer file.Close()
 
-	return cfg, nil
+    data, err := ioutil.ReadAll(file)
+    if err != nil {
+        return nil, fmt.Errorf("failed to read config file: %w", err)
+    }
+
+    var config AppConfig
+    if err := yaml.Unmarshal(data, &config); err != nil {
+        return nil, fmt.Errorf("failed to parse YAML config: %w", err)
+    }
+
+    if config.Database.Host == "" {
+        config.Database.Host = "localhost"
+    }
+
+    if config.Database.Port == 0 {
+        config.Database.Port = 5432
+    }
+
+    if config.Server.Port == 0 {
+        config.Server.Port = 8080
+    }
+
+    if config.Server.Mode == "" {
+        config.Server.Mode = "development"
+    }
+
+    if config.LogLevel == "" {
+        config.LogLevel = "info"
+    }
+
+    return &config, nil
 }
 
-func getEnv(key, defaultValue string) string {
-	if value, exists := os.LookupEnv(key); exists {
-		return value
-	}
-	return defaultValue
-}
+func ValidateConfig(config *AppConfig) error {
+    if config.Database.Name == "" {
+        return fmt.Errorf("database name is required")
+    }
 
-func getEnvAsInt(key string, defaultValue int) int {
-	strValue := getEnv(key, "")
-	if strValue == "" {
-		return defaultValue
-	}
-	
-	value, err := strconv.Atoi(strValue)
-	if err != nil {
-		return defaultValue
-	}
-	return value
-}
+    if config.Database.Username == "" {
+        return fmt.Errorf("database username is required")
+    }
 
-func getEnvAsBool(key string, defaultValue bool) bool {
-	strValue := getEnv(key, "")
-	if strValue == "" {
-		return defaultValue
-	}
-	
-	value, err := strconv.ParseBool(strValue)
-	if err != nil {
-		return defaultValue
-	}
-	return value
-}
+    if config.Server.Port < 1 || config.Server.Port > 65535 {
+        return fmt.Errorf("server port must be between 1 and 65535")
+    }
 
-func parseFeatureFlags(flagsStr string) map[string]bool {
-	flags := make(map[string]bool)
-	if flagsStr == "" {
-		return flags
-	}
-	
-	items := strings.Split(flagsStr, ",")
-	for _, item := range items {
-		parts := strings.Split(item, "=")
-		if len(parts) == 2 {
-			flagName := strings.TrimSpace(parts[0])
-			flagValue, err := strconv.ParseBool(strings.TrimSpace(parts[1]))
-			if err == nil {
-				flags[flagName] = flagValue
-			}
-		}
-	}
-	return flags
-}
+    validModes := map[string]bool{
+        "development": true,
+        "staging":     true,
+        "production":  true,
+    }
 
-func validateConfig(cfg *AppConfig) error {
-	if cfg.ServerPort < 1 || cfg.ServerPort > 65535 {
-		return &ConfigError{Field: "SERVER_PORT", Message: "port must be between 1 and 65535"}
-	}
-	
-	if cfg.DBPort < 1 || cfg.DBPort > 65535 {
-		return &ConfigError{Field: "DB_PORT", Message: "port must be between 1 and 65535"}
-	}
-	
-	return nil
-}
+    if !validModes[config.Server.Mode] {
+        return fmt.Errorf("invalid server mode: %s", config.Server.Mode)
+    }
 
-type ConfigError struct {
-	Field   string
-	Message string
-}
-
-func (e *ConfigError) Error() string {
-	return "config error: " + e.Field + " - " + e.Message
+    return nil
 }
