@@ -108,4 +108,42 @@ func (a *Authenticator) validateToken(tokenString string) (string, error) {
 func GetUserID(ctx context.Context) (string, bool) {
 	userID, ok := ctx.Value(userIDKey).(string)
 	return userID, ok
+}package middleware
+
+import (
+	"net/http"
+	"strings"
+)
+
+type Authenticator struct {
+	secretKey string
+}
+
+func NewAuthenticator(secretKey string) *Authenticator {
+	return &Authenticator{secretKey: secretKey}
+}
+
+func (a *Authenticator) ValidateToken(token string) bool {
+	if token == "" {
+		return false
+	}
+	
+	// In production, use proper JWT validation library
+	// This is simplified for demonstration
+	return strings.HasPrefix(token, "Bearer valid_") && 
+		len(token) > 20 && 
+		strings.Contains(token, a.secretKey)
+}
+
+func (a *Authenticator) Middleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		authHeader := r.Header.Get("Authorization")
+		
+		if !a.ValidateToken(authHeader) {
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
+		
+		next.ServeHTTP(w, r)
+	})
 }
