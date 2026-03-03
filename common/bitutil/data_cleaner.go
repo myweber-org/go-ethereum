@@ -87,3 +87,107 @@ func DeduplicateStrings(slice []string) []string {
 	}
 	return result
 }
+package main
+
+import (
+	"errors"
+	"fmt"
+	"strings"
+)
+
+type DataRecord struct {
+	ID    string
+	Email string
+	Value float64
+}
+
+type DataCleaner struct {
+	records map[string]DataRecord
+}
+
+func NewDataCleaner() *DataCleaner {
+	return &DataCleaner{
+		records: make(map[string]DataRecord),
+	}
+}
+
+func (dc *DataCleaner) ValidateRecord(record DataRecord) error {
+	if strings.TrimSpace(record.ID) == "" {
+		return errors.New("empty ID")
+	}
+	if !strings.Contains(record.Email, "@") {
+		return errors.New("invalid email format")
+	}
+	if record.Value < 0 {
+		return errors.New("negative value not allowed")
+	}
+	return nil
+}
+
+func (dc *DataCleaner) AddRecord(record DataRecord) error {
+	if err := dc.ValidateRecord(record); err != nil {
+		return fmt.Errorf("validation failed: %w", err)
+	}
+	if _, exists := dc.records[record.ID]; exists {
+		return errors.New("duplicate ID")
+	}
+	dc.records[record.ID] = record
+	return nil
+}
+
+func (dc *DataCleaner) RemoveDuplicatesByEmail() int {
+	emailMap := make(map[string]string)
+	removedCount := 0
+
+	for id, record := range dc.records {
+		if existingID, found := emailMap[record.Email]; found {
+			delete(dc.records, id)
+			removedCount++
+			continue
+		}
+		emailMap[record.Email] = id
+	}
+	return removedCount
+}
+
+func (dc *DataCleaner) GetRecords() []DataRecord {
+	records := make([]DataRecord, 0, len(dc.records))
+	for _, record := range dc.records {
+		records = append(records, record)
+	}
+	return records
+}
+
+func (dc *DataCleaner) CalculateAverage() float64 {
+	if len(dc.records) == 0 {
+		return 0
+	}
+	var sum float64
+	for _, record := range dc.records {
+		sum += record.Value
+	}
+	return sum / float64(len(dc.records))
+}
+
+func main() {
+	cleaner := NewDataCleaner()
+
+	sampleData := []DataRecord{
+		{ID: "001", Email: "user1@example.com", Value: 10.5},
+		{ID: "002", Email: "user2@example.com", Value: 20.3},
+		{ID: "003", Email: "user1@example.com", Value: 15.7},
+		{ID: "004", Email: "invalid-email", Value: 5.0},
+	}
+
+	for _, record := range sampleData {
+		if err := cleaner.AddRecord(record); err != nil {
+			fmt.Printf("Failed to add record %s: %v\n", record.ID, err)
+		}
+	}
+
+	fmt.Printf("Initial records: %d\n", len(cleaner.GetRecords()))
+	removed := cleaner.RemoveDuplicatesByEmail()
+	fmt.Printf("Removed duplicates: %d\n", removed)
+	fmt.Printf("Final records: %d\n", len(cleaner.GetRecords()))
+	fmt.Printf("Average value: %.2f\n", cleaner.CalculateAverage())
+}
