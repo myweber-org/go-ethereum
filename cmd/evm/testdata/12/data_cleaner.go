@@ -78,4 +78,116 @@ func RemoveDuplicates[T comparable](slice []T) []T {
 		}
 	}
 	return result
+}package main
+
+import (
+    "encoding/csv"
+    "fmt"
+    "io"
+    "os"
+    "strconv"
+    "strings"
+)
+
+type Record struct {
+    ID    int
+    Name  string
+    Email string
+    Score float64
+}
+
+func cleanCSV(inputPath, outputPath string) error {
+    inFile, err := os.Open(inputPath)
+    if err != nil {
+        return fmt.Errorf("failed to open input file: %w", err)
+    }
+    defer inFile.Close()
+
+    outFile, err := os.Create(outputPath)
+    if err != nil {
+        return fmt.Errorf("failed to create output file: %w", err)
+    }
+    defer outFile.Close()
+
+    reader := csv.NewReader(inFile)
+    writer := csv.NewWriter(outFile)
+    defer writer.Flush()
+
+    headers, err := reader.Read()
+    if err != nil {
+        return fmt.Errorf("failed to read headers: %w", err)
+    }
+
+    if err := writer.Write(headers); err != nil {
+        return fmt.Errorf("failed to write headers: %w", err)
+    }
+
+    for {
+        row, err := reader.Read()
+        if err == io.EOF {
+            break
+        }
+        if err != nil {
+            continue
+        }
+
+        cleaned := processRow(row)
+        if cleaned != nil {
+            writer.Write([]string{
+                strconv.Itoa(cleaned.ID),
+                cleaned.Name,
+                cleaned.Email,
+                fmt.Sprintf("%.2f", cleaned.Score),
+            })
+        }
+    }
+
+    return nil
+}
+
+func processRow(row []string) *Record {
+    if len(row) != 4 {
+        return nil
+    }
+
+    id, err := strconv.Atoi(strings.TrimSpace(row[0]))
+    if err != nil || id <= 0 {
+        return nil
+    }
+
+    name := strings.TrimSpace(row[1])
+    if name == "" || len(name) > 100 {
+        return nil
+    }
+
+    email := strings.TrimSpace(row[2])
+    if !strings.Contains(email, "@") || strings.Contains(email, " ") {
+        return nil
+    }
+
+    score, err := strconv.ParseFloat(strings.TrimSpace(row[3]), 64)
+    if err != nil || score < 0 || score > 100 {
+        return nil
+    }
+
+    return &Record{
+        ID:    id,
+        Name:  name,
+        Email: email,
+        Score: score,
+    }
+}
+
+func main() {
+    if len(os.Args) != 3 {
+        fmt.Println("Usage: data_cleaner <input.csv> <output.csv>")
+        os.Exit(1)
+    }
+
+    if err := cleanCSV(os.Args[1], os.Args[2]); err != nil {
+        fmt.Printf("Error: %v\n", err)
+        os.Exit(1)
+    }
+
+    fmt.Println("Data cleaning completed successfully")
 }
