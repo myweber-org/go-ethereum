@@ -232,4 +232,47 @@ func CalculateStats(records []Record) (float64, float64) {
     stdDev := variance / float64(len(records))
 
     return average, stdDev
+}package main
+
+import (
+	"fmt"
+)
+
+// CalculateMovingAverage calculates the moving average of a slice of float64 values
+// with a specified window size.
+func CalculateMovingAverage(data []float64, windowSize int) ([]float64, error) {
+	if windowSize <= 0 {
+		return nil, fmt.Errorf("window size must be positive")
+	}
+	if len(data) == 0 {
+		return nil, fmt.Errorf("data slice cannot be empty")
+	}
+	if windowSize > len(data) {
+		return nil, fmt.Errorf("window size cannot exceed data length")
+	}
+
+	result := make([]float64, len(data)-windowSize+1)
+	for i := 0; i <= len(data)-windowSize; i++ {
+		sum := 0.0
+		for j := i; j < i+windowSize; j++ {
+			sum += data[j]
+		}
+		result[i] = sum / float64(windowSize)
+	}
+	return result, nil
+}
+
+func main() {
+	// Example usage
+	data := []float64{1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0}
+	windowSize := 3
+
+	averages, err := CalculateMovingAverage(data, windowSize)
+	if err != nil {
+		fmt.Printf("Error: %v\n", err)
+		return
+	}
+
+	fmt.Println("Original data:", data)
+	fmt.Printf("Moving averages (window size %d): %v\n", windowSize, averages)
 }
