@@ -239,4 +239,85 @@ func getEnvAsSlice(key string, defaultValue []string) []string {
         return defaultValue
     }
     return strings.Split(valueStr, ",")
+}package config
+
+import (
+	"errors"
+	"io/ioutil"
+	"os"
+	"path/filepath"
+
+	"gopkg.in/yaml.v3"
+)
+
+type DatabaseConfig struct {
+	Host     string `yaml:"host" validate:"required"`
+	Port     int    `yaml:"port" validate:"required,min=1,max=65535"`
+	Username string `yaml:"username" validate:"required"`
+	Password string `yaml:"password" validate:"required"`
+	Database string `yaml:"database" validate:"required"`
+}
+
+type ServerConfig struct {
+	Port         int    `yaml:"port" validate:"required,min=1,max=65535"`
+	ReadTimeout  int    `yaml:"read_timeout" validate:"required,min=1"`
+	WriteTimeout int    `yaml:"write_timeout" validate:"required,min=1"`
+	Environment  string `yaml:"environment" validate:"required,oneof=development staging production"`
+}
+
+type AppConfig struct {
+	Server   ServerConfig   `yaml:"server" validate:"required"`
+	Database DatabaseConfig `yaml:"database" validate:"required"`
+}
+
+func LoadConfig(configPath string) (*AppConfig, error) {
+	if configPath == "" {
+		configPath = getDefaultConfigPath()
+	}
+
+	data, err := ioutil.ReadFile(configPath)
+	if err != nil {
+		return nil, err
+	}
+
+	var config AppConfig
+	if err := yaml.Unmarshal(data, &config); err != nil {
+		return nil, err
+	}
+
+	if err := validateConfig(&config); err != nil {
+		return nil, err
+	}
+
+	return &config, nil
+}
+
+func getDefaultConfigPath() string {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return "./config.yaml"
+	}
+	return filepath.Join(homeDir, ".app", "config.yaml")
+}
+
+func validateConfig(config *AppConfig) error {
+	if config.Server.Port <= 0 || config.Server.Port > 65535 {
+		return errors.New("server port must be between 1 and 65535")
+	}
+
+	if config.Database.Port <= 0 || config.Database.Port > 65535 {
+		return errors.New("database port must be between 1 and 65535")
+	}
+
+	validEnvs := map[string]bool{
+		"development": true,
+		"staging":     true,
+		"production":  true,
+	}
+
+	if !validEnvs[config.Server.Environment] {
+		return errors.New("environment must be one of: development, staging, production")
+	}
+
+	return nil
 }
