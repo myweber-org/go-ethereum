@@ -256,3 +256,114 @@ func (rl *RotatingLogger) Close() error {
 	}
 	return nil
 }
+package main
+
+import (
+	"fmt"
+	"os"
+	"path/filepath"
+	"sync"
+	"time"
+)
+
+type Rotator struct {
+	mu          sync.Mutex
+	file        *os.File
+	currentSize int64
+	maxSize     int64
+	basePath    string
+	rotateTime  time.Time
+	interval    time.Duration
+}
+
+func NewRotator(basePath string, maxSize int64, interval time.Duration) (*Rotator, error) {
+	if err := os.MkdirAll(filepath.Dir(basePath), 0755); err != nil {
+		return nil, err
+	}
+
+	r := &Rotator{
+		maxSize:  maxSize,
+		basePath: basePath,
+		interval: interval,
+	}
+	if err := r.openCurrent(); err != nil {
+		return nil, err
+	}
+	return r, nil
+}
+
+func (r *Rotator) openCurrent() error {
+	now := time.Now()
+	filename := fmt.Sprintf("%s.%s.log", r.basePath, now.Format("2006-01-02_150405"))
+	file, err := os.OpenFile(filename, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		return err
+	}
+
+	stat, err := file.Stat()
+	if err != nil {
+		file.Close()
+		return err
+	}
+
+	r.file = file
+	r.currentSize = stat.Size()
+	r.rotateTime = now
+	return nil
+}
+
+func (r *Rotator) rotate() error {
+	if r.file != nil {
+		r.file.Close()
+	}
+
+	archiveName := fmt.Sprintf("%s.%s.log", r.basePath, time.Now().Format("2006-01-02_150405"))
+	return os.Rename(r.basePath+".log", archiveName)
+}
+
+func (r *Rotator) Write(p []byte) (int, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	now := time.Now()
+	if r.currentSize+int64(len(p)) > r.maxSize || now.Sub(r.rotateTime) > r.interval {
+		if err := r.rotate(); err != nil {
+			return 0, err
+		}
+		if err := r.openCurrent(); err != nil {
+			return 0, err
+		}
+	}
+
+	n, err := r.file.Write(p)
+	if err == nil {
+		r.currentSize += int64(n)
+	}
+	return n, err
+}
+
+func (r *Rotator) Close() error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.file != nil {
+		return r.file.Close()
+	}
+	return nil
+}
+
+func main() {
+	rotator, err := NewRotator("./logs/app", 10*1024*1024, 24*time.Hour)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to create rotator: %v\n", err)
+		os.Exit(1)
+	}
+	defer rotator.Close()
+
+	for i := 0; i < 100; i++ {
+		message := fmt.Sprintf("Log entry %d at %s\n", i, time.Now().Format(time.RFC3339))
+		if _, err := rotator.Write([]byte(message)); err != nil {
+			fmt.Fprintf(os.Stderr, "Write failed: %v\n", err)
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+}
