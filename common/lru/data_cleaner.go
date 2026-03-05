@@ -6,52 +6,25 @@ import (
 	"strings"
 )
 
-type DataCleaner struct {
-	seen map[string]bool
-}
+func CleanData(input []string) []string {
+	seen := make(map[string]bool)
+	var result []string
 
-func NewDataCleaner() *DataCleaner {
-	return &DataCleaner{
-		seen: make(map[string]bool),
-	}
-}
-
-func (dc *DataCleaner) RemoveDuplicates(items []string) []string {
-	var unique []string
-	for _, item := range items {
-		normalized := strings.ToLower(strings.TrimSpace(item))
-		if !dc.seen[normalized] {
-			dc.seen[normalized] = true
-			unique = append(unique, item)
+	for _, item := range input {
+		trimmed := strings.TrimSpace(item)
+		if trimmed == "" {
+			continue
+		}
+		if !seen[trimmed] {
+			seen[trimmed] = true
+			result = append(result, trimmed)
 		}
 	}
-	return unique
-}
-
-func (dc *DataCleaner) ValidateEmail(email string) bool {
-	if !strings.Contains(email, "@") {
-		return false
-	}
-	parts := strings.Split(email, "@")
-	if len(parts) != 2 {
-		return false
-	}
-	return len(parts[0]) > 0 && len(parts[1]) > 0 && strings.Contains(parts[1], ".")
+	return result
 }
 
 func main() {
-	cleaner := NewDataCleaner()
-	
-	data := []string{"test@example.com", "  TEST@example.com  ", "invalid", "another@domain.org"}
-	
-	uniqueData := cleaner.RemoveDuplicates(data)
-	fmt.Println("Unique items:", uniqueData)
-	
-	for _, email := range uniqueData {
-		if cleaner.ValidateEmail(email) {
-			fmt.Printf("Valid email: %s\n", email)
-		} else {
-			fmt.Printf("Invalid email: %s\n", email)
-		}
-	}
+	data := []string{"  apple ", "banana", "  apple", "banana ", "", "  cherry  "}
+	cleaned := CleanData(data)
+	fmt.Println("Cleaned data:", cleaned)
 }
