@@ -1,100 +1,56 @@
-
 package main
 
 import (
-	"encoding/csv"
-	"errors"
-	"io"
-	"os"
-	"strconv"
+	"encoding/json"
+	"fmt"
+	"regexp"
+	"strings"
 )
 
-type DataRecord struct {
-	ID    int
-	Name  string
-	Value float64
+type UserData struct {
+	Email    string `json:"email"`
+	Username string `json:"username"`
+	Age      int    `json:"age"`
 }
 
-func ReadCSVFile(filename string) ([]DataRecord, error) {
-	file, err := os.Open(filename)
-	if err != nil {
-		return nil, err
-	}
-	defer file.Close()
-
-	reader := csv.NewReader(file)
-	var records []DataRecord
-
-	// Skip header
-	_, err = reader.Read()
-	if err != nil && err != io.EOF {
-		return nil, err
-	}
-
-	for {
-		row, err := reader.Read()
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			return nil, err
-		}
-
-		if len(row) < 3 {
-			return nil, errors.New("invalid csv format")
-		}
-
-		id, err := strconv.Atoi(row[0])
-		if err != nil {
-			return nil, err
-		}
-
-		value, err := strconv.ParseFloat(row[2], 64)
-		if err != nil {
-			return nil, err
-		}
-
-		record := DataRecord{
-			ID:    id,
-			Name:  row[1],
-			Value: value,
-		}
-		records = append(records, record)
-	}
-
-	return records, nil
+func ValidateEmail(email string) bool {
+	pattern := `^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$`
+	matched, _ := regexp.MatchString(pattern, email)
+	return matched
 }
 
-func ValidateRecords(records []DataRecord) error {
-	seenIDs := make(map[int]bool)
-	for _, record := range records {
-		if record.ID <= 0 {
-			return errors.New("invalid ID value")
-		}
-		if record.Name == "" {
-			return errors.New("empty name field")
-		}
-		if record.Value < 0 {
-			return errors.New("negative value not allowed")
-		}
-		if seenIDs[record.ID] {
-			return errors.New("duplicate ID found")
-		}
-		seenIDs[record.ID] = true
-	}
-	return nil
+func SanitizeUsername(username string) string {
+	username = strings.TrimSpace(username)
+	username = strings.ToLower(username)
+	return username
 }
 
-func ProcessData(filename string) ([]DataRecord, error) {
-	records, err := ReadCSVFile(filename)
+func ProcessUserData(rawData []byte) (*UserData, error) {
+	var data UserData
+	err := json.Unmarshal(rawData, &data)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to unmarshal JSON: %w", err)
 	}
 
-	err = ValidateRecords(records)
-	if err != nil {
-		return nil, err
+	if !ValidateEmail(data.Email) {
+		return nil, fmt.Errorf("invalid email format: %s", data.Email)
 	}
 
-	return records, nil
+	data.Username = SanitizeUsername(data.Username)
+
+	if data.Age < 0 || data.Age > 150 {
+		return nil, fmt.Errorf("age out of valid range: %d", data.Age)
+	}
+
+	return &data, nil
+}
+
+func main() {
+	jsonData := []byte(`{"email":"test@example.com","username":"  MyUser  ","age":25}`)
+	processedData, err := ProcessUserData(jsonData)
+	if err != nil {
+		fmt.Printf("Error processing data: %v\n", err)
+		return
+	}
+	fmt.Printf("Processed data: %+v\n", processedData)
 }
