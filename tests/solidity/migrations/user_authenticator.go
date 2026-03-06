@@ -1,62 +1,52 @@
-package auth
+package middleware
 
 import (
-    "errors"
-    "time"
-
-    "github.com/golang-jwt/jwt/v4"
+	"context"
+	"net/http"
+	"strings"
 )
 
-type Claims struct {
-    Username string `json:"username"`
-    UserID   int    `json:"user_id"`
-    jwt.RegisteredClaims
+type contextKey string
+
+const userIDKey contextKey = "userID"
+
+func Authenticate(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		authHeader := r.Header.Get("Authorization")
+		if authHeader == "" {
+			http.Error(w, "Authorization header required", http.StatusUnauthorized)
+			return
+		}
+
+		parts := strings.Split(authHeader, " ")
+		if len(parts) != 2 || parts[0] != "Bearer" {
+			http.Error(w, "Invalid authorization format", http.StatusUnauthorized)
+			return
+		}
+
+		token := parts[1]
+		userID, err := validateToken(token)
+		if err != nil {
+			http.Error(w, "Invalid token", http.StatusUnauthorized)
+			return
+		}
+
+		ctx := context.WithValue(r.Context(), userIDKey, userID)
+		next.ServeHTTP(w, r.WithContext(ctx))
+	})
 }
 
-var jwtKey = []byte("your_secret_key_here")
-
-func GenerateToken(username string, userID int) (string, error) {
-    expirationTime := time.Now().Add(24 * time.Hour)
-    claims := &Claims{
-        Username: username,
-        UserID:   userID,
-        RegisteredClaims: jwt.RegisteredClaims{
-            ExpiresAt: jwt.NewNumericDate(expirationTime),
-            IssuedAt:  jwt.NewNumericDate(time.Now()),
-            Issuer:    "auth_service",
-        },
-    }
-
-    token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-    return token.SignedString(jwtKey)
+func GetUserID(ctx context.Context) (string, bool) {
+	userID, ok := ctx.Value(userIDKey).(string)
+	return userID, ok
 }
 
-func ValidateToken(tokenString string) (*Claims, error) {
-    claims := &Claims{}
-    token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
-        return jwtKey, nil
-    })
-
-    if err != nil {
-        return nil, err
-    }
-
-    if !token.Valid {
-        return nil, errors.New("invalid token")
-    }
-
-    return claims, nil
-}
-
-func RefreshToken(tokenString string) (string, error) {
-    claims, err := ValidateToken(tokenString)
-    if err != nil {
-        return "", err
-    }
-
-    if time.Until(claims.ExpiresAt.Time) > 30*time.Minute {
-        return "", errors.New("token refresh not needed yet")
-    }
-
-    return GenerateToken(claims.Username, claims.UserID)
+func validateToken(token string) (string, error) {
+	// In a real implementation, this would parse and validate a JWT
+	// For this example, we'll use a simple mock validation
+	if token == "" || len(token) < 10 {
+		return "", http.ErrAbortHandler
+	}
+	// Mock: extract user ID from token (in reality, decode JWT claims)
+	return "user_" + token[:8], nil
 }
