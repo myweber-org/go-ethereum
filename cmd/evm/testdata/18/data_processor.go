@@ -2,87 +2,86 @@
 package main
 
 import (
-	"regexp"
-	"strings"
+	"encoding/csv"
+	"fmt"
+	"io"
+	"os"
+	"strconv"
 )
 
-type DataProcessor struct {
-	allowedPattern *regexp.Regexp
+type Record struct {
+	ID    int
+	Name  string
+	Value float64
 }
 
-func NewDataProcessor(pattern string) (*DataProcessor, error) {
-	compiled, err := regexp.Compile(pattern)
+func processCSV(filename string) ([]Record, error) {
+	file, err := os.Open(filename)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to open file: %w", err)
 	}
-	return &DataProcessor{allowedPattern: compiled}, nil
-}
+	defer file.Close()
 
-func (dp *DataProcessor) CleanInput(input string) string {
-	trimmed := strings.TrimSpace(input)
-	return dp.allowedPattern.FindString(trimmed)
-}
+	reader := csv.NewReader(file)
+	records := []Record{}
+	line := 0
 
-func (dp *DataProcessor) Validate(input string) bool {
-	return dp.allowedPattern.MatchString(input)
-}
-
-func (dp *DataProcessor) ProcessBatch(inputs []string) []string {
-	var results []string
-	for _, input := range inputs {
-		cleaned := dp.CleanInput(input)
-		if cleaned != "" {
-			results = append(results, cleaned)
+	for {
+		row, err := reader.Read()
+		if err == io.EOF {
+			break
 		}
-	}
-	return results
-}
-package main
-
-import (
-	"errors"
-	"strings"
-	"time"
-)
-
-type DataRecord struct {
-	ID        string
-	Value     float64
-	Timestamp time.Time
-	Category  string
-}
-
-func ValidateRecord(record DataRecord) error {
-	if record.ID == "" {
-		return errors.New("ID cannot be empty")
-	}
-	if record.Value < 0 {
-		return errors.New("value must be non-negative")
-	}
-	if record.Timestamp.After(time.Now()) {
-		return errors.New("timestamp cannot be in the future")
-	}
-	return nil
-}
-
-func TransformRecord(record DataRecord) DataRecord {
-	transformed := record
-	transformed.Category = strings.ToUpper(strings.TrimSpace(record.Category))
-	transformed.Value = roundToTwoDecimals(record.Value)
-	return transformed
-}
-
-func roundToTwoDecimals(value float64) float64 {
-	return float64(int(value*100+0.5)) / 100
-}
-
-func ProcessRecords(records []DataRecord) ([]DataRecord, error) {
-	var processed []DataRecord
-	for _, record := range records {
-		if err := ValidateRecord(record); err != nil {
-			return nil, err
+		if err != nil {
+			return nil, fmt.Errorf("csv read error at line %d: %w", line, err)
 		}
-		processed = append(processed, TransformRecord(record))
+
+		if len(row) != 3 {
+			return nil, fmt.Errorf("invalid column count at line %d", line)
+		}
+
+		id, err := strconv.Atoi(row[0])
+		if err != nil {
+			return nil, fmt.Errorf("invalid ID at line %d: %w", line, err)
+		}
+
+		name := row[1]
+		if name == "" {
+			return nil, fmt.Errorf("empty name at line %d", line)
+		}
+
+		value, err := strconv.ParseFloat(row[2], 64)
+		if err != nil {
+			return nil, fmt.Errorf("invalid value at line %d: %w", line, err)
+		}
+
+		records = append(records, Record{
+			ID:    id,
+			Name:  name,
+			Value: value,
+		})
+		line++
 	}
-	return processed, nil
+
+	return records, nil
+}
+
+func calculateStats(records []Record) (float64, float64) {
+	if len(records) == 0 {
+		return 0, 0
+	}
+
+	var sum float64
+	for _, r := range records {
+		sum += r.Value
+	}
+	average := sum / float64(len(records))
+
+	var variance float64
+	for _, r := range records {
+		diff := r.Value - average
+		variance += diff * diff
+	}
+	variance = variance / float64(len(records))
+
+	return average, variance
 }
