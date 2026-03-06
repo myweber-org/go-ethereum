@@ -129,3 +129,92 @@ func main() {
 
     fmt.Println("Log rotation test completed")
 }
+package main
+
+import (
+	"fmt"
+	"io"
+	"os"
+	"path/filepath"
+	"sync"
+	"time"
+)
+
+type RotatingWriter struct {
+	mu           sync.Mutex
+	currentSize  int64
+	maxSize      int64
+	basePath     string
+	currentFile  *os.File
+	fileCount    int
+}
+
+func NewRotatingWriter(basePath string, maxSize int64) (*RotatingWriter, error) {
+	w := &RotatingWriter{
+		basePath: basePath,
+		maxSize:  maxSize,
+	}
+	if err := w.openCurrentFile(); err != nil {
+		return nil, err
+	}
+	return w, nil
+}
+
+func (w *RotatingWriter) openCurrentFile() error {
+	w.fileCount++
+	filename := fmt.Sprintf("%s.%d.log", w.basePath, w.fileCount)
+	file, err := os.OpenFile(filename, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0644)
+	if err != nil {
+		return err
+	}
+	stat, err := file.Stat()
+	if err != nil {
+		file.Close()
+		return err
+	}
+	w.currentFile = file
+	w.currentSize = stat.Size()
+	return nil
+}
+
+func (w *RotatingWriter) Write(p []byte) (n int, err error) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+
+	if w.currentSize+int64(len(p)) > w.maxSize && w.currentSize > 0 {
+		w.currentFile.Close()
+		if err := w.openCurrentFile(); err != nil {
+			return 0, err
+		}
+	}
+
+	n, err = w.currentFile.Write(p)
+	if err == nil {
+		w.currentSize += int64(n)
+	}
+	return n, err
+}
+
+func (w *RotatingWriter) Close() error {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if w.currentFile != nil {
+		return w.currentFile.Close()
+	}
+	return nil
+}
+
+func main() {
+	writer, err := NewRotatingWriter("app", 1024*1024)
+	if err != nil {
+		fmt.Printf("Failed to create writer: %v\n", err)
+		return
+	}
+	defer writer.Close()
+
+	for i := 0; i < 100; i++ {
+		msg := fmt.Sprintf("[%s] Log entry number %d\n", time.Now().Format(time.RFC3339), i)
+		writer.Write([]byte(msg))
+		time.Sleep(10 * time.Millisecond)
+	}
+}
