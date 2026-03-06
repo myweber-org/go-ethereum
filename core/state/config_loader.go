@@ -54,4 +54,67 @@ func LoadConfig() (*AppConfig, error) {
 	}
 
 	return cfg, nil
+}package config
+
+import (
+	"errors"
+	"io/ioutil"
+	"path/filepath"
+
+	"gopkg.in/yaml.v2"
+)
+
+type Config struct {
+	Server struct {
+		Host string `yaml:"host"`
+		Port int    `yaml:"port"`
+	} `yaml:"server"`
+	Database struct {
+		Username string `yaml:"username"`
+		Password string `yaml:"password"`
+		Host     string `yaml:"host"`
+		Name     string `yaml:"name"`
+	} `yaml:"database"`
+	LogLevel string `yaml:"log_level"`
+}
+
+func LoadConfig(configPath string) (*Config, error) {
+	if configPath == "" {
+		return nil, errors.New("config path cannot be empty")
+	}
+
+	absPath, err := filepath.Abs(configPath)
+	if err != nil {
+		return nil, err
+	}
+
+	data, err := ioutil.ReadFile(absPath)
+	if err != nil {
+		return nil, err
+	}
+
+	var config Config
+	err = yaml.Unmarshal(data, &config)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := validateConfig(&config); err != nil {
+		return nil, err
+	}
+
+	return &config, nil
+}
+
+func validateConfig(c *Config) error {
+	if c.Server.Host == "" {
+		return errors.New("server host cannot be empty")
+	}
+	if c.Server.Port <= 0 || c.Server.Port > 65535 {
+		return errors.New("server port must be between 1 and 65535")
+	}
+	if c.Database.Name == "" {
+		return errors.New("database name cannot be empty")
+	}
+	return nil
 }
