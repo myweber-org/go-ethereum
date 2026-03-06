@@ -3,180 +3,131 @@ package main
 
 import (
     "encoding/csv"
+    "encoding/json"
     "fmt"
     "io"
     "os"
     "strconv"
 )
 
-type DataRecord struct {
-    ID    int
-    Name  string
-    Value float64
+type Record struct {
+    ID        int     `json:"id"`
+    Name      string  `json:"name"`
+    Value     float64 `json:"value"`
+    Timestamp string  `json:"timestamp"`
 }
 
-func ProcessCSVFile(filename string) ([]DataRecord, error) {
+func processCSVFile(filename string) ([]Record, error) {
     file, err := os.Open(filename)
     if err != nil {
-        return nil, fmt.Errorf("failed to open file: %w", err)
+        return nil, err
     }
     defer file.Close()
 
     reader := csv.NewReader(file)
-    var records []DataRecord
+    var records []Record
     lineNumber := 0
 
     for {
-        lineNumber++
-        row, err := reader.Read()
+        line, err := reader.Read()
         if err == io.EOF {
             break
         }
         if err != nil {
-            return nil, fmt.Errorf("csv read error at line %d: %w", lineNumber, err)
+            return nil, err
         }
 
-        if len(row) != 3 {
-            return nil, fmt.Errorf("invalid column count at line %d: expected 3, got %d", lineNumber, len(row))
+        lineNumber++
+        if lineNumber == 1 {
+            continue
         }
 
-        id, err := strconv.Atoi(row[0])
+        if len(line) != 4 {
+            continue
+        }
+
+        id, err := strconv.Atoi(line[0])
         if err != nil {
-            return nil, fmt.Errorf("invalid ID at line %d: %w", lineNumber, err)
+            continue
         }
 
-        value, err := strconv.ParseFloat(row[2], 64)
+        value, err := strconv.ParseFloat(line[2], 64)
         if err != nil {
-            return nil, fmt.Errorf("invalid value at line %d: %w", lineNumber, err)
+            continue
         }
 
-        records = append(records, DataRecord{
-            ID:    id,
-            Name:  row[1],
-            Value: value,
-        })
+        record := Record{
+            ID:        id,
+            Name:      line[1],
+            Value:     value,
+            Timestamp: line[3],
+        }
+        records = append(records, record)
     }
 
     return records, nil
 }
 
-func ValidateRecords(records []DataRecord) error {
-    seenIDs := make(map[int]bool)
-    for _, record := range records {
-        if record.ID <= 0 {
-            return fmt.Errorf("invalid record ID: %d", record.ID)
-        }
-        if record.Name == "" {
-            return fmt.Errorf("empty name for record ID: %d", record.ID)
-        }
-        if record.Value < 0 {
-            return fmt.Errorf("negative value for record ID: %d", record.ID)
-        }
-        if seenIDs[record.ID] {
-            return fmt.Errorf("duplicate ID found: %d", record.ID)
-        }
-        seenIDs[record.ID] = true
+func convertToJSON(records []Record) (string, error) {
+    jsonData, err := json.MarshalIndent(records, "", "  ")
+    if err != nil {
+        return "", err
     }
-    return nil
+    return string(jsonData), nil
 }
 
-func CalculateStatistics(records []DataRecord) (float64, float64) {
+func calculateStatistics(records []Record) (float64, float64) {
     if len(records) == 0 {
         return 0, 0
     }
 
     var sum float64
-    var max float64 = records[0].Value
-
     for _, record := range records {
         sum += record.Value
-        if record.Value > max {
-            max = record.Value
-        }
     }
-
     average := sum / float64(len(records))
-    return average, max
-}
-package main
 
-import (
-	"errors"
-	"strings"
-)
+    var varianceSum float64
+    for _, record := range records {
+        diff := record.Value - average
+        varianceSum += diff * diff
+    }
+    variance := varianceSum / float64(len(records))
 
-type UserData struct {
-	ID    int
-	Name  string
-	Email string
-	Age   int
-}
-
-func ValidateUserData(data UserData) error {
-	if data.ID <= 0 {
-		return errors.New("invalid user ID")
-	}
-
-	data.Name = strings.TrimSpace(data.Name)
-	if data.Name == "" {
-		return errors.New("name cannot be empty")
-	}
-
-	data.Email = strings.TrimSpace(data.Email)
-	if !strings.Contains(data.Email, "@") {
-		return errors.New("invalid email format")
-	}
-
-	if data.Age < 0 || data.Age > 150 {
-		return errors.New("age must be between 0 and 150")
-	}
-
-	return nil
-}
-
-func TransformUserName(name string) string {
-	name = strings.TrimSpace(name)
-	if len(name) == 0 {
-		return "Anonymous"
-	}
-	return strings.Title(strings.ToLower(name))
-}
-
-func ProcessUserInput(rawName string, rawEmail string, rawAge int) (UserData, error) {
-	transformedName := TransformUserName(rawName)
-
-	user := UserData{
-		Name:  transformedName,
-		Email: strings.ToLower(strings.TrimSpace(rawEmail)),
-		Age:   rawAge,
-	}
-
-	if err := ValidateUserData(user); err != nil {
-		return UserData{}, err
-	}
-
-	return user, nil
-}
-package main
-
-import (
-	"fmt"
-)
-
-// FilterAndDouble filters even numbers from a slice and doubles their values.
-func FilterAndDouble(numbers []int) []int {
-	var result []int
-	for _, num := range numbers {
-		if num%2 == 0 {
-			result = append(result, num*2)
-		}
-	}
-	return result
+    return average, variance
 }
 
 func main() {
-	input := []int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}
-	output := FilterAndDouble(input)
-	fmt.Println("Original:", input)
-	fmt.Println("Filtered and Doubled:", output)
+    if len(os.Args) < 2 {
+        fmt.Println("Usage: data_processor <csv_file>")
+        return
+    }
+
+    filename := os.Args[1]
+    records, err := processCSVFile(filename)
+    if err != nil {
+        fmt.Printf("Error processing file: %v\n", err)
+        return
+    }
+
+    fmt.Printf("Processed %d records\n", len(records))
+
+    avg, variance := calculateStatistics(records)
+    fmt.Printf("Average value: %.2f\n", avg)
+    fmt.Printf("Variance: %.2f\n", variance)
+
+    jsonOutput, err := convertToJSON(records)
+    if err != nil {
+        fmt.Printf("Error converting to JSON: %v\n", err)
+        return
+    }
+
+    outputFile := "output.json"
+    err = os.WriteFile(outputFile, []byte(jsonOutput), 0644)
+    if err != nil {
+        fmt.Printf("Error writing JSON file: %v\n", err)
+        return
+    }
+
+    fmt.Printf("JSON output written to %s\n", outputFile)
 }
