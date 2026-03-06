@@ -276,4 +276,126 @@ func main() {
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
+}package main
+
+import (
+	"fmt"
+	"io"
+	"os"
+	"path/filepath"
+	"strings"
+	"time"
+)
+
+type RotatingLogger struct {
+	filePath    string
+	maxSize     int64
+	currentSize int64
+	file        *os.File
+}
+
+func NewRotatingLogger(path string, maxSizeMB int) (*RotatingLogger, error) {
+	rl := &RotatingLogger{
+		filePath: path,
+		maxSize:  int64(maxSizeMB) * 1024 * 1024,
+	}
+
+	if err := rl.openFile(); err != nil {
+		return nil, err
+	}
+
+	return rl, nil
+}
+
+func (rl *RotatingLogger) openFile() error {
+	if rl.file != nil {
+		rl.file.Close()
+	}
+
+	file, err := os.OpenFile(rl.filePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		return err
+	}
+
+	info, err := file.Stat()
+	if err != nil {
+		file.Close()
+		return err
+	}
+
+	rl.file = file
+	rl.currentSize = info.Size()
+	return nil
+}
+
+func (rl *RotatingLogger) rotate() error {
+	rl.file.Close()
+
+	timestamp := time.Now().Format("20060102_150405")
+	ext := filepath.Ext(rl.filePath)
+	base := strings.TrimSuffix(rl.filePath, ext)
+	archivePath := fmt.Sprintf("%s_%s%s.gz", base, timestamp, ext)
+
+	source, err := os.Open(rl.filePath)
+	if err != nil {
+		return err
+	}
+	defer source.Close()
+
+	dest, err := os.Create(archivePath)
+	if err != nil {
+		return err
+	}
+	defer dest.Close()
+
+	compressor := NewGzipWriter(dest)
+	defer compressor.Close()
+
+	if _, err := io.Copy(compressor, source); err != nil {
+		return err
+	}
+
+	if err := os.Remove(rl.filePath); err != nil {
+		return err
+	}
+
+	return rl.openFile()
+}
+
+func (rl *RotatingLogger) Write(p []byte) (int, error) {
+	if rl.currentSize+int64(len(p)) > rl.maxSize {
+		if err := rl.rotate(); err != nil {
+			return 0, err
+		}
+	}
+
+	n, err := rl.file.Write(p)
+	if err == nil {
+		rl.currentSize += int64(n)
+	}
+	return n, err
+}
+
+func (rl *RotatingLogger) Close() error {
+	if rl.file != nil {
+		return rl.file.Close()
+	}
+	return nil
+}
+
+func main() {
+	logger, err := NewRotatingLogger("app.log", 10)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to create logger: %v\n", err)
+		os.Exit(1)
+	}
+	defer logger.Close()
+
+	for i := 0; i < 1000; i++ {
+		message := fmt.Sprintf("Log entry %d: %s\n", i, time.Now().Format(time.RFC3339))
+		if _, err := logger.Write([]byte(message)); err != nil {
+			fmt.Fprintf(os.Stderr, "Write error: %v\n", err)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
 }
