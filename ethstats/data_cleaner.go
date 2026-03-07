@@ -199,4 +199,76 @@ func main() {
 	for _, item := range data {
 		fmt.Printf("Normalized '%s': %s\n", item, cleaner.Normalize(item))
 	}
+}package main
+
+import (
+	"encoding/csv"
+	"fmt"
+	"io"
+	"os"
+	"strings"
+)
+
+func main() {
+	if len(os.Args) != 3 {
+		fmt.Println("Usage: data_cleaner <input.csv> <output.csv>")
+		os.Exit(1)
+	}
+
+	inputFile := os.Args[1]
+	outputFile := os.Args[2]
+
+	inFile, err := os.Open(inputFile)
+	if err != nil {
+		fmt.Printf("Error opening input file: %v\n", err)
+		os.Exit(1)
+	}
+	defer inFile.Close()
+
+	outFile, err := os.Create(outputFile)
+	if err != nil {
+		fmt.Printf("Error creating output file: %v\n", err)
+		os.Exit(1)
+	}
+	defer outFile.Close()
+
+	reader := csv.NewReader(inFile)
+	writer := csv.NewWriter(outFile)
+	defer writer.Flush()
+
+	seen := make(map[string]bool)
+	headerWritten := false
+
+	for {
+		record, err := reader.Read()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			fmt.Printf("Error reading CSV: %v\n", err)
+			os.Exit(1)
+		}
+
+		if !headerWritten {
+			err = writer.Write(record)
+			if err != nil {
+				fmt.Printf("Error writing header: %v\n", err)
+				os.Exit(1)
+			}
+			headerWritten = true
+			continue
+		}
+
+		key := strings.Join(record, "|")
+		if !seen[key] {
+			seen[key] = true
+			err = writer.Write(record)
+			if err != nil {
+				fmt.Printf("Error writing record: %v\n", err)
+				os.Exit(1)
+			}
+		}
+	}
+
+	fmt.Printf("Data cleaning complete. Output saved to %s\n", outputFile)
 }
