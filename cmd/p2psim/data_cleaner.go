@@ -1,152 +1,61 @@
-package main
 
-import "fmt"
-
-func RemoveDuplicates(input []string) []string {
-	seen := make(map[string]struct{})
-	result := []string{}
-
-	for _, item := range input {
-		if _, exists := seen[item]; !exists {
-			seen[item] = struct{}{}
-			result = append(result, item)
-		}
-	}
-	return result
-}
-
-func main() {
-	data := []string{"apple", "banana", "apple", "orange", "banana", "grape"}
-	cleaned := RemoveDuplicates(data)
-	fmt.Println("Original:", data)
-	fmt.Println("Cleaned:", cleaned)
-}
-package main
-
-import "fmt"
-
-func removeDuplicates(input []int) []int {
-	seen := make(map[int]bool)
-	result := []int{}
-
-	for _, value := range input {
-		if !seen[value] {
-			seen[value] = true
-			result = append(result, value)
-		}
-	}
-	return result
-}
-
-func main() {
-	data := []int{4, 2, 8, 2, 4, 9, 8, 1}
-	cleaned := removeDuplicates(data)
-	fmt.Println("Original:", data)
-	fmt.Println("Cleaned:", cleaned)
-}
 package main
 
 import (
-	"encoding/csv"
 	"fmt"
-	"os"
 	"strings"
 )
 
-func main() {
-	if len(os.Args) < 2 {
-		fmt.Println("Usage: data_cleaner <input_file.csv>")
-		os.Exit(1)
+type DataCleaner struct {
+	seen map[string]bool
+}
+
+func NewDataCleaner() *DataCleaner {
+	return &DataCleaner{
+		seen: make(map[string]bool),
 	}
+}
 
-	inputFile := os.Args[1]
-	outputFile := strings.TrimSuffix(inputFile, ".csv") + "_cleaned.csv"
-
-	file, err := os.Open(inputFile)
-	if err != nil {
-		fmt.Printf("Error opening file: %v\n", err)
-		os.Exit(1)
-	}
-	defer file.Close()
-
-	reader := csv.NewReader(file)
-	records, err := reader.ReadAll()
-	if err != nil {
-		fmt.Printf("Error reading CSV: %v\n", err)
-		os.Exit(1)
-	}
-
-	seen := make(map[string]bool)
-	var uniqueRecords [][]string
-
-	for _, record := range records {
-		key := strings.Join(record, "|")
-		if !seen[key] {
-			seen[key] = true
-			uniqueRecords = append(uniqueRecords, record)
+func (dc *DataCleaner) RemoveDuplicates(items []string) []string {
+	var unique []string
+	for _, item := range items {
+		normalized := strings.ToLower(strings.TrimSpace(item))
+		if !dc.seen[normalized] && dc.isValid(item) {
+			dc.seen[normalized] = true
+			unique = append(unique, item)
 		}
 	}
+	return unique
+}
 
-	outFile, err := os.Create(outputFile)
-	if err != nil {
-		fmt.Printf("Error creating output file: %v\n", err)
-		os.Exit(1)
-	}
-	defer outFile.Close()
+func (dc *DataCleaner) isValid(item string) bool {
+	return len(item) > 0 && len(item) < 256
+}
 
-	writer := csv.NewWriter(outFile)
-	err = writer.WriteAll(uniqueRecords)
-	if err != nil {
-		fmt.Printf("Error writing CSV: %v\n", err)
-		os.Exit(1)
-	}
-
-	writer.Flush()
-	fmt.Printf("Cleaned data saved to: %s\n", outputFile)
-	fmt.Printf("Removed %d duplicate rows\n", len(records)-len(uniqueRecords))
-}package main
-
-import "fmt"
-
-func RemoveDuplicates(input []int) []int {
-    seen := make(map[int]bool)
-    result := []int{}
-
-    for _, value := range input {
-        if !seen[value] {
-            seen[value] = true
-            result = append(result, value)
-        }
-    }
-
-    return result
+func (dc *DataCleaner) Reset() {
+	dc.seen = make(map[string]bool)
 }
 
 func main() {
-    data := []int{1, 2, 2, 3, 4, 4, 5, 1, 6}
-    cleaned := RemoveDuplicates(data)
-    fmt.Println("Original:", data)
-    fmt.Println("Cleaned:", cleaned)
-}package main
-
-import "fmt"
-
-func RemoveDuplicates(input []string) []string {
-	seen := make(map[string]bool)
-	result := []string{}
-
-	for _, value := range input {
-		if !seen[value] {
-			seen[value] = true
-			result = append(result, value)
-		}
+	cleaner := NewDataCleaner()
+	
+	data := []string{
+		"apple",
+		"APPLE",
+		" banana ",
+		"banana",
+		"",
+		"orange",
+		"Orange",
 	}
-	return result
-}
-
-func main() {
-	data := []string{"apple", "banana", "apple", "orange", "banana", "grape"}
-	cleaned := RemoveDuplicates(data)
-	fmt.Println("Original:", data)
-	fmt.Println("Cleaned:", cleaned)
+	
+	cleaned := cleaner.RemoveDuplicates(data)
+	fmt.Printf("Original: %v\n", data)
+	fmt.Printf("Cleaned: %v\n", cleaned)
+	
+	cleaner.Reset()
+	
+	moreData := []string{"grape", "Grape", "GRAPE"}
+	cleaned2 := cleaner.RemoveDuplicates(moreData)
+	fmt.Printf("Second batch: %v\n", cleaned2)
 }
