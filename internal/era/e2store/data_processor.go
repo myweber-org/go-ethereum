@@ -103,3 +103,103 @@ func main() {
 	fmt.Printf("Average value: %.2f\n", avg)
 	fmt.Printf("Maximum value: %.2f\n", max)
 }
+package main
+
+import (
+    "errors"
+    "fmt"
+    "strings"
+    "time"
+)
+
+type DataRecord struct {
+    ID        string
+    Timestamp time.Time
+    Value     float64
+    Tags      []string
+}
+
+func ValidateRecord(record DataRecord) error {
+    if record.ID == "" {
+        return errors.New("record ID cannot be empty")
+    }
+    if record.Value < 0 {
+        return errors.New("record value cannot be negative")
+    }
+    if record.Timestamp.After(time.Now()) {
+        return errors.New("record timestamp cannot be in the future")
+    }
+    return nil
+}
+
+func TransformTags(tags []string) []string {
+    var transformed []string
+    for _, tag := range tags {
+        trimmed := strings.TrimSpace(tag)
+        if trimmed != "" {
+            transformed = append(transformed, strings.ToLower(trimmed))
+        }
+    }
+    return transformed
+}
+
+func CalculateAverage(records []DataRecord) (float64, error) {
+    if len(records) == 0 {
+        return 0, errors.New("cannot calculate average for empty record set")
+    }
+
+    var sum float64
+    validCount := 0
+
+    for _, record := range records {
+        if err := ValidateRecord(record); err == nil {
+            sum += record.Value
+            validCount++
+        }
+    }
+
+    if validCount == 0 {
+        return 0, errors.New("no valid records found for average calculation")
+    }
+
+    return sum / float64(validCount), nil
+}
+
+func FilterByTag(records []DataRecord, targetTag string) []DataRecord {
+    var filtered []DataRecord
+    for _, record := range records {
+        for _, tag := range record.Tags {
+            if strings.EqualFold(tag, targetTag) {
+                filtered = append(filtered, record)
+                break
+            }
+        }
+    }
+    return filtered
+}
+
+func ProcessDataBatch(records []DataRecord) ([]DataRecord, error) {
+    var processed []DataRecord
+    var validationErrors []string
+
+    for i, record := range records {
+        if err := ValidateRecord(record); err != nil {
+            validationErrors = append(validationErrors, fmt.Sprintf("record %d: %v", i, err))
+            continue
+        }
+
+        processedRecord := DataRecord{
+            ID:        record.ID,
+            Timestamp: record.Timestamp,
+            Value:     record.Value,
+            Tags:      TransformTags(record.Tags),
+        }
+        processed = append(processed, processedRecord)
+    }
+
+    if len(validationErrors) > 0 && len(processed) == 0 {
+        return nil, fmt.Errorf("all records failed validation: %v", strings.Join(validationErrors, "; "))
+    }
+
+    return processed, nil
+}
