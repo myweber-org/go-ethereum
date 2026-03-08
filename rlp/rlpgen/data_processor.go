@@ -88,3 +88,70 @@ func TransformPhoneNumber(phone string) (string, error) {
 
 	return "", errors.New("invalid phone number format")
 }
+package main
+
+import (
+	"errors"
+	"regexp"
+	"strings"
+)
+
+type UserData struct {
+	Username string
+	Email    string
+	Age      int
+}
+
+func ValidateUserData(data UserData) error {
+	if strings.TrimSpace(data.Username) == "" {
+		return errors.New("username cannot be empty")
+	}
+
+	usernameRegex := regexp.MustCompile(`^[a-zA-Z0-9_]{3,20}$`)
+	if !usernameRegex.MatchString(data.Username) {
+		return errors.New("username must be 3-20 characters and contain only letters, numbers, and underscores")
+	}
+
+	emailRegex := regexp.MustCompile(`^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$`)
+	if !emailRegex.MatchString(data.Email) {
+		return errors.New("invalid email format")
+	}
+
+	if data.Age < 0 || data.Age > 150 {
+		return errors.New("age must be between 0 and 150")
+	}
+
+	return nil
+}
+
+func TransformUsername(username string) string {
+	return strings.ToLower(strings.TrimSpace(username))
+}
+
+func NormalizeEmail(email string) string {
+	email = strings.ToLower(strings.TrimSpace(email))
+	parts := strings.Split(email, "@")
+	if len(parts) != 2 {
+		return email
+	}
+	localPart := strings.Split(parts[0], "+")[0]
+	localPart = strings.ReplaceAll(localPart, ".", "")
+	return localPart + "@" + parts[1]
+}
+
+func ProcessUserInput(username, email string, age int) (UserData, error) {
+	transformedUsername := TransformUsername(username)
+	normalizedEmail := NormalizeEmail(email)
+
+	userData := UserData{
+		Username: transformedUsername,
+		Email:    normalizedEmail,
+		Age:      age,
+	}
+
+	if err := ValidateUserData(userData); err != nil {
+		return UserData{}, err
+	}
+
+	return userData, nil
+}
