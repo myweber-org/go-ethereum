@@ -18,47 +18,36 @@ type DatabaseConfig struct {
 
 type ServerConfig struct {
     Port         int            `yaml:"port"`
-    Debug        bool           `yaml:"debug"`
     ReadTimeout  int            `yaml:"read_timeout"`
     WriteTimeout int            `yaml:"write_timeout"`
+    Database     DatabaseConfig `yaml:"database"`
 }
 
-type AppConfig struct {
-    Server   ServerConfig   `yaml:"server"`
-    Database DatabaseConfig `yaml:"database"`
-}
-
-func LoadConfig(configPath string) (*AppConfig, error) {
-    if configPath == "" {
-        configPath = "config.yaml"
+func LoadConfig(path string) (*ServerConfig, error) {
+    if _, err := os.Stat(path); os.IsNotExist(err) {
+        return nil, fmt.Errorf("config file not found: %s", path)
     }
 
-    file, err := os.Open(configPath)
+    data, err := ioutil.ReadFile(path)
     if err != nil {
-        return nil, fmt.Errorf("failed to open config file: %w", err)
-    }
-    defer file.Close()
-
-    data, err := ioutil.ReadAll(file)
-    if err != nil {
-        return nil, fmt.Errorf("failed to read config file: %w", err)
+        return nil, fmt.Errorf("failed to read config file: %v", err)
     }
 
-    var config AppConfig
+    var config ServerConfig
     if err := yaml.Unmarshal(data, &config); err != nil {
-        return nil, fmt.Errorf("failed to parse YAML: %w", err)
+        return nil, fmt.Errorf("failed to parse YAML config: %v", err)
     }
 
     if err := validateConfig(&config); err != nil {
-        return nil, fmt.Errorf("config validation failed: %w", err)
+        return nil, fmt.Errorf("config validation failed: %v", err)
     }
 
     return &config, nil
 }
 
-func validateConfig(config *AppConfig) error {
-    if config.Server.Port <= 0 || config.Server.Port > 65535 {
-        return fmt.Errorf("invalid server port: %d", config.Server.Port)
+func validateConfig(config *ServerConfig) error {
+    if config.Port <= 0 || config.Port > 65535 {
+        return fmt.Errorf("invalid server port: %d", config.Port)
     }
 
     if config.Database.Host == "" {
