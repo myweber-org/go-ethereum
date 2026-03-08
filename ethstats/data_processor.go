@@ -1,173 +1,39 @@
 
-package main
+package data
 
 import (
-	"encoding/csv"
-	"fmt"
-	"io"
-	"os"
-	"strconv"
+	"regexp"
 	"strings"
 )
 
-type DataRecord struct {
-	ID      int
-	Name    string
-	Value   float64
-	Active  bool
+type Processor struct {
+	allowedPattern *regexp.Regexp
 }
 
-func ProcessCSVFile(filename string) ([]DataRecord, error) {
-	file, err := os.Open(filename)
+func NewProcessor(allowedPattern string) (*Processor, error) {
+	compiled, err := regexp.Compile(allowedPattern)
 	if err != nil {
-		return nil, fmt.Errorf("failed to open file: %w", err)
+		return nil, err
 	}
-	defer file.Close()
-
-	reader := csv.NewReader(file)
-	reader.TrimLeadingSpace = true
-
-	var records []DataRecord
-	lineNumber := 0
-
-	for {
-		lineNumber++
-		row, err := reader.Read()
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			return nil, fmt.Errorf("csv read error at line %d: %w", lineNumber, err)
-		}
-
-		if len(row) != 4 {
-			return nil, fmt.Errorf("invalid column count at line %d: expected 4, got %d", lineNumber, len(row))
-		}
-
-		record, err := parseRow(row, lineNumber)
-		if err != nil {
-			return nil, err
-		}
-
-		records = append(records, record)
-	}
-
-	return records, nil
+	return &Processor{allowedPattern: compiled}, nil
 }
 
-func parseRow(row []string, lineNumber int) (DataRecord, error) {
-	var record DataRecord
-
-	id, err := strconv.Atoi(strings.TrimSpace(row[0]))
-	if err != nil {
-		return DataRecord{}, fmt.Errorf("invalid ID at line %d: %w", lineNumber, err)
-	}
-	record.ID = id
-
-	record.Name = strings.TrimSpace(row[1])
-
-	value, err := strconv.ParseFloat(strings.TrimSpace(row[2]), 64)
-	if err != nil {
-		return DataRecord{}, fmt.Errorf("invalid value at line %d: %w", lineNumber, err)
-	}
-	record.Value = value
-
-	active, err := strconv.ParseBool(strings.TrimSpace(row[3]))
-	if err != nil {
-		return DataRecord{}, fmt.Errorf("invalid active flag at line %d: %w", lineNumber, err)
-	}
-	record.Active = active
-
-	return record, nil
+func (p *Processor) CleanInput(input string) string {
+	trimmed := strings.TrimSpace(input)
+	return p.allowedPattern.FindString(trimmed)
 }
 
-func ValidateRecords(records []DataRecord) []error {
-	var errors []error
-
-	for i, record := range records {
-		if record.ID <= 0 {
-			errors = append(errors, fmt.Errorf("record %d: ID must be positive", i+1))
-		}
-		if record.Name == "" {
-			errors = append(errors, fmt.Errorf("record %d: name cannot be empty", i+1))
-		}
-		if record.Value < 0 {
-			errors = append(errors, fmt.Errorf("record %d: value cannot be negative", i+1))
-		}
-	}
-
-	return errors
+func (p *Processor) Validate(input string) bool {
+	return p.allowedPattern.MatchString(input)
 }
 
-func CalculateStatistics(records []DataRecord) (float64, float64, int) {
-	if len(records) == 0 {
-		return 0, 0, 0
-	}
-
-	var sum float64
-	var activeCount int
-	minValue := records[0].Value
-	maxValue := records[0].Value
-
-	for _, record := range records {
-		sum += record.Value
-		if record.Active {
-			activeCount++
-		}
-		if record.Value < minValue {
-			minValue = record.Value
-		}
-		if record.Value > maxValue {
-			maxValue = record.Value
+func (p *Processor) ProcessBatch(inputs []string) []string {
+	var results []string
+	for _, input := range inputs {
+		cleaned := p.CleanInput(input)
+		if cleaned != "" {
+			results = append(results, cleaned)
 		}
 	}
-
-	average := sum / float64(len(records))
-	return average, maxValue - minValue, activeCount
-}package main
-
-import (
-	"encoding/json"
-	"fmt"
-	"strings"
-)
-
-type UserData struct {
-	ID    int    `json:"id"`
-	Name  string `json:"name"`
-	Email string `json:"email"`
-}
-
-func ParseAndValidateJSON(rawJSON string) (*UserData, error) {
-	if strings.TrimSpace(rawJSON) == "" {
-		return nil, fmt.Errorf("empty JSON input")
-	}
-
-	var data UserData
-	err := json.Unmarshal([]byte(rawJSON), &data)
-	if err != nil {
-		return nil, fmt.Errorf("JSON parsing failed: %w", err)
-	}
-
-	if data.ID <= 0 {
-		return nil, fmt.Errorf("invalid ID: must be positive integer")
-	}
-	if data.Name == "" {
-		return nil, fmt.Errorf("name field is required")
-	}
-	if !strings.Contains(data.Email, "@") {
-		return nil, fmt.Errorf("invalid email format")
-	}
-
-	return &data, nil
-}
-
-func main() {
-	jsonStr := `{"id": 100, "name": "John Doe", "email": "john@example.com"}`
-	user, err := ParseAndValidateJSON(jsonStr)
-	if err != nil {
-		fmt.Printf("Error: %v\n", err)
-		return
-	}
-	fmt.Printf("Parsed user: %+v\n", user)
+	return results
 }
