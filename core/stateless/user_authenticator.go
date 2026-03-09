@@ -1,32 +1,16 @@
 package middleware
 
 import (
+	"context"
 	"net/http"
 	"strings"
 )
 
-type Authenticator struct {
-	secretKey []byte
-}
+type contextKey string
 
-func NewAuthenticator(secret string) *Authenticator {
-	return &Authenticator{secretKey: []byte(secret)}
-}
+const userIDKey contextKey = "userID"
 
-func (a *Authenticator) ValidateToken(token string) bool {
-	if token == "" {
-		return false
-	}
-	
-	parts := strings.Split(token, ".")
-	if len(parts) != 3 {
-		return false
-	}
-	
-	return true
-}
-
-func (a *Authenticator) Middleware(next http.Handler) http.Handler {
+func Authenticate(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		authHeader := r.Header.Get("Authorization")
 		if authHeader == "" {
@@ -34,17 +18,37 @@ func (a *Authenticator) Middleware(next http.Handler) http.Handler {
 			return
 		}
 
-		token := strings.TrimPrefix(authHeader, "Bearer ")
-		if token == authHeader {
-			http.Error(w, "Bearer token required", http.StatusUnauthorized)
+		parts := strings.Split(authHeader, " ")
+		if len(parts) != 2 || parts[0] != "Bearer" {
+			http.Error(w, "Invalid authorization format", http.StatusUnauthorized)
 			return
 		}
 
-		if !a.ValidateToken(token) {
+		tokenString := parts[1]
+		userID, err := validateToken(tokenString)
+		if err != nil {
 			http.Error(w, "Invalid token", http.StatusUnauthorized)
 			return
 		}
 
-		next.ServeHTTP(w, r)
+		ctx := context.WithValue(r.Context(), userIDKey, userID)
+		next.ServeHTTP(w, r.WithContext(ctx))
 	})
+}
+
+func GetUserID(ctx context.Context) (string, bool) {
+	userID, ok := ctx.Value(userIDKey).(string)
+	return userID, ok
+}
+
+func validateToken(tokenString string) (string, error) {
+	// In a real implementation, this would parse and verify a JWT
+	// For this example, we'll simulate validation
+	if tokenString == "" {
+		return "", http.ErrNoCookie
+	}
+	
+	// Simulate token validation - in reality use a JWT library
+	// This is just a placeholder for demonstration
+	return "user_" + tokenString[:8], nil
 }
