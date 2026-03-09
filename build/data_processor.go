@@ -97,4 +97,58 @@ func GenerateReport(records []DataRecord) {
 	fmt.Printf("Total records processed: %d\n", len(records))
 	fmt.Printf("Active records: %d\n", activeCount)
 	fmt.Printf("Inactive records: %d\n", len(records)-activeCount)
+}package main
+
+import (
+	"errors"
+	"regexp"
+	"strings"
+)
+
+type UserData struct {
+	Username string
+	Email    string
+	Age      int
+}
+
+func ValidateUsername(username string) error {
+	if len(username) < 3 || len(username) > 20 {
+		return errors.New("username must be between 3 and 20 characters")
+	}
+	matched, _ := regexp.MatchString("^[a-zA-Z0-9_]+$", username)
+	if !matched {
+		return errors.New("username can only contain letters, numbers, and underscores")
+	}
+	return nil
+}
+
+func ValidateEmail(email string) error {
+	emailRegex := regexp.MustCompile(`^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$`)
+	if !emailRegex.MatchString(email) {
+		return errors.New("invalid email format")
+	}
+	return nil
+}
+
+func TransformUsername(username string) string {
+	return strings.ToLower(strings.TrimSpace(username))
+}
+
+func ProcessUserData(data UserData) (UserData, error) {
+	transformedUsername := TransformUsername(data.Username)
+	data.Username = transformedUsername
+
+	if err := ValidateUsername(data.Username); err != nil {
+		return UserData{}, err
+	}
+
+	if err := ValidateEmail(data.Email); err != nil {
+		return UserData{}, err
+	}
+
+	if data.Age < 0 || data.Age > 150 {
+		return UserData{}, errors.New("age must be between 0 and 150")
+	}
+
+	return data, nil
 }
