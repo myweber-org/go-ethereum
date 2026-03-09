@@ -342,4 +342,58 @@ func validateToken(tokenString string) (string, error) {
 	// Token validation logic would be implemented here
 	// For this example, we'll return a mock user ID
 	return "user-12345", nil
+}package middleware
+
+import (
+	"net/http"
+	"strings"
+)
+
+type Authenticator struct {
+	secretKey string
+}
+
+func NewAuthenticator(secretKey string) *Authenticator {
+	return &Authenticator{secretKey: secretKey}
+}
+
+func (a *Authenticator) ValidateToken(tokenString string) (bool, error) {
+	if tokenString == "" {
+		return false, nil
+	}
+
+	// In production, use proper JWT library like github.com/golang-jwt/jwt
+	// This is a simplified example
+	expectedPrefix := "Bearer "
+	if !strings.HasPrefix(tokenString, expectedPrefix) {
+		return false, nil
+	}
+
+	token := strings.TrimPrefix(tokenString, expectedPrefix)
+	
+	// Mock validation - in real implementation, verify JWT signature
+	if token == "valid-token-example" {
+		return true, nil
+	}
+
+	return false, nil
+}
+
+func (a *Authenticator) Middleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		authHeader := r.Header.Get("Authorization")
+		
+		valid, err := a.ValidateToken(authHeader)
+		if err != nil {
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			return
+		}
+
+		if !valid {
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
+
+		next.ServeHTTP(w, r)
+	})
 }
