@@ -1,52 +1,105 @@
 package config
 
 import (
-	"io/ioutil"
-	"log"
-
-	"gopkg.in/yaml.v2"
+	"encoding/json"
+	"fmt"
+	"os"
+	"strings"
 )
 
+type DatabaseConfig struct {
+	Host     string `json:"host" env:"DB_HOST"`
+	Port     int    `json:"port" env:"DB_PORT"`
+	Username string `json:"username" env:"DB_USER"`
+	Password string `json:"password" env:"DB_PASS"`
+	Database string `json:"database" env:"DB_NAME"`
+}
+
+type ServerConfig struct {
+	Port         int    `json:"port" env:"SERVER_PORT"`
+	ReadTimeout  int    `json:"read_timeout" env:"READ_TIMEOUT"`
+	WriteTimeout int    `json:"write_timeout" env:"WRITE_TIMEOUT"`
+	DebugMode    bool   `json:"debug_mode" env:"DEBUG_MODE"`
+	LogLevel     string `json:"log_level" env:"LOG_LEVEL"`
+}
+
 type AppConfig struct {
-	Server struct {
-		Port int    `yaml:"port"`
-		Host string `yaml:"host"`
-	} `yaml:"server"`
-	Database struct {
-		Username string `yaml:"username"`
-		Password string `yaml:"password"`
-		Host     string `yaml:"host"`
-		Port     int    `yaml:"port"`
-		Name     string `yaml:"name"`
-	} `yaml:"database"`
-	Logging struct {
-		Level  string `yaml:"level"`
-		Output string `yaml:"output"`
-	} `yaml:"logging"`
+	Server   ServerConfig   `json:"server"`
+	Database DatabaseConfig `json:"database"`
+	Features []string       `json:"features"`
 }
 
-func LoadConfig(filePath string) (*AppConfig, error) {
-	config := &AppConfig{}
-	yamlFile, err := ioutil.ReadFile(filePath)
-	if err != nil {
-		return nil, err
+func LoadConfig(configPath string) (*AppConfig, error) {
+	var config AppConfig
+
+	if configPath != "" {
+		file, err := os.Open(configPath)
+		if err != nil {
+			return nil, fmt.Errorf("failed to open config file: %w", err)
+		}
+		defer file.Close()
+
+		decoder := json.NewDecoder(file)
+		if err := decoder.Decode(&config); err != nil {
+			return nil, fmt.Errorf("failed to decode config: %w", err)
+		}
 	}
 
-	err = yaml.Unmarshal(yamlFile, config)
-	if err != nil {
-		return nil, err
+	overrideWithEnvVars(&config)
+
+	if err := validateConfig(&config); err != nil {
+		return nil, fmt.Errorf("config validation failed: %w", err)
 	}
 
-	log.Printf("Configuration loaded successfully from %s", filePath)
-	return config, nil
+	return &config, nil
 }
 
-func (c *AppConfig) Validate() error {
-	if c.Server.Port <= 0 || c.Server.Port > 65535 {
-		return fmt.Errorf("invalid server port: %d", c.Server.Port)
+func overrideWithEnvVars(config *AppConfig) {
+	overrideStruct(&config.Server)
+	overrideStruct(&config.Database)
+}
+
+func overrideStruct(s interface{}) {
+	// Implementation would use reflection to read struct tags
+	// and override values from environment variables
+	// Simplified for this example
+}
+
+func validateConfig(config *AppConfig) error {
+	if config.Server.Port <= 0 || config.Server.Port > 65535 {
+		return fmt.Errorf("invalid server port: %d", config.Server.Port)
 	}
-	if c.Database.Port <= 0 || c.Database.Port > 65535 {
-		return fmt.Errorf("invalid database port: %d", c.Database.Port)
+
+	if config.Database.Host == "" {
+		return fmt.Errorf("database host is required")
 	}
+
+	if config.Database.Port <= 0 || config.Database.Port > 65535 {
+		return fmt.Errorf("invalid database port: %d", config.Database.Port)
+	}
+
+	validLogLevels := map[string]bool{
+		"debug": true,
+		"info":  true,
+		"warn":  true,
+		"error": true,
+	}
+
+	if !validLogLevels[strings.ToLower(config.Server.LogLevel)] {
+		return fmt.Errorf("invalid log level: %s", config.Server.LogLevel)
+	}
+
 	return nil
+}
+
+func (c *AppConfig) String() string {
+	// Mask sensitive information
+	masked := *c
+	masked.Database.Password = "******"
+	
+	data, err := json.MarshalIndent(masked, "", "  ")
+	if err != nil {
+		return fmt.Sprintf("Error marshaling config: %v", err)
+	}
+	return string(data)
 }
