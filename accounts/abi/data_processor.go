@@ -142,3 +142,61 @@ func main() {
         fmt.Println(row)
     }
 }
+package data
+
+import (
+	"errors"
+	"strings"
+	"time"
+)
+
+type Record struct {
+	ID        string
+	Value     float64
+	Timestamp time.Time
+	Tags      []string
+}
+
+func ValidateRecord(r Record) error {
+	if r.ID == "" {
+		return errors.New("record ID cannot be empty")
+	}
+	if r.Value < 0 {
+		return errors.New("record value cannot be negative")
+	}
+	if r.Timestamp.IsZero() {
+		return errors.New("record timestamp must be set")
+	}
+	return nil
+}
+
+func TransformRecord(r Record, multiplier float64) Record {
+	return Record{
+		ID:        strings.ToUpper(r.ID),
+		Value:     r.Value * multiplier,
+		Timestamp: r.Timestamp.UTC(),
+		Tags:      append([]string{"processed"}, r.Tags...),
+	}
+}
+
+func FilterRecords(records []Record, minValue float64) []Record {
+	var filtered []Record
+	for _, r := range records {
+		if r.Value >= minValue {
+			filtered = append(filtered, r)
+		}
+	}
+	return filtered
+}
+
+func CalculateAverage(records []Record) float64 {
+	if len(records) == 0 {
+		return 0
+	}
+	
+	var sum float64
+	for _, r := range records {
+		sum += r.Value
+	}
+	return sum / float64(len(records))
+}
