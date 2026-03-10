@@ -210,3 +210,94 @@ func main() {
 	fmt.Printf("Average value: %.2f\n", average)
 	fmt.Printf("Maximum value: %.2f\n", max)
 }
+package main
+
+import (
+	"encoding/csv"
+	"fmt"
+	"io"
+	"os"
+	"strconv"
+)
+
+type Record struct {
+	ID    int
+	Name  string
+	Value float64
+}
+
+func parseCSVFile(filename string) ([]Record, error) {
+	file, err := os.Open(filename)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+
+	reader := csv.NewReader(file)
+	records := []Record{}
+	lineNum := 0
+
+	for {
+		line, err := reader.Read()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return nil, fmt.Errorf("line %d: %v", lineNum, err)
+		}
+
+		if len(line) != 3 {
+			return nil, fmt.Errorf("line %d: expected 3 columns, got %d", lineNum, len(line))
+		}
+
+		id, err := strconv.Atoi(line[0])
+		if err != nil {
+			return nil, fmt.Errorf("line %d: invalid ID: %v", lineNum, err)
+		}
+
+		name := line[1]
+		if name == "" {
+			return nil, fmt.Errorf("line %d: name cannot be empty", lineNum)
+		}
+
+		value, err := strconv.ParseFloat(line[2], 64)
+		if err != nil {
+			return nil, fmt.Errorf("line %d: invalid value: %v", lineNum, err)
+		}
+
+		records = append(records, Record{
+			ID:    id,
+			Name:  name,
+			Value: value,
+		})
+		lineNum++
+	}
+
+	return records, nil
+}
+
+func validateRecords(records []Record) error {
+	seenIDs := make(map[int]bool)
+	for _, record := range records {
+		if record.ID <= 0 {
+			return fmt.Errorf("record %s has invalid ID: %d", record.Name, record.ID)
+		}
+		if seenIDs[record.ID] {
+			return fmt.Errorf("duplicate ID found: %d", record.ID)
+		}
+		seenIDs[record.ID] = true
+
+		if record.Value < 0 {
+			return fmt.Errorf("record %s has negative value: %f", record.Name, record.Value)
+		}
+	}
+	return nil
+}
+
+func calculateTotalValue(records []Record) float64 {
+	total := 0.0
+	for _, record := range records {
+		total += record.Value
+	}
+	return total
+}
