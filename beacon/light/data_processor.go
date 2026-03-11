@@ -1,86 +1,77 @@
 package main
 
 import (
-	"encoding/csv"
-	"errors"
-	"io"
-	"os"
-	"strconv"
+    "encoding/csv"
+    "fmt"
+    "io"
+    "os"
+    "strings"
 )
 
-type DataRecord struct {
-	ID    int
-	Name  string
-	Value float64
+func processCSVFile(inputPath, outputPath string) error {
+    inputFile, err := os.Open(inputPath)
+    if err != nil {
+        return fmt.Errorf("failed to open input file: %w", err)
+    }
+    defer inputFile.Close()
+
+    outputFile, err := os.Create(outputPath)
+    if err != nil {
+        return fmt.Errorf("failed to create output file: %w", err)
+    }
+    defer outputFile.Close()
+
+    reader := csv.NewReader(inputFile)
+    writer := csv.NewWriter(outputFile)
+    defer writer.Flush()
+
+    headerProcessed := false
+    for {
+        record, err := reader.Read()
+        if err == io.EOF {
+            break
+        }
+        if err != nil {
+            return fmt.Errorf("error reading CSV record: %w", err)
+        }
+
+        if !headerProcessed {
+            headerProcessed = true
+            if err := writer.Write(record); err != nil {
+                return fmt.Errorf("error writing header: %w", err)
+            }
+            continue
+        }
+
+        cleanedRecord := make([]string, len(record))
+        for i, field := range record {
+            cleanedRecord[i] = strings.TrimSpace(field)
+            if cleanedRecord[i] == "" {
+                cleanedRecord[i] = "N/A"
+            }
+        }
+
+        if err := writer.Write(cleanedRecord); err != nil {
+            return fmt.Errorf("error writing record: %w", err)
+        }
+    }
+
+    return nil
 }
 
-func ParseCSVFile(filePath string) ([]DataRecord, error) {
-	file, err := os.Open(filePath)
-	if err != nil {
-		return nil, err
-	}
-	defer file.Close()
+func main() {
+    if len(os.Args) != 3 {
+        fmt.Println("Usage: data_processor <input.csv> <output.csv>")
+        os.Exit(1)
+    }
 
-	reader := csv.NewReader(file)
-	records := make([]DataRecord, 0)
+    inputFile := os.Args[1]
+    outputFile := os.Args[2]
 
-	// Skip header
-	_, err = reader.Read()
-	if err != nil {
-		return nil, err
-	}
+    if err := processCSVFile(inputFile, outputFile); err != nil {
+        fmt.Printf("Error processing file: %v\n", err)
+        os.Exit(1)
+    }
 
-	for {
-		row, err := reader.Read()
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			return nil, err
-		}
-
-		if len(row) < 3 {
-			return nil, errors.New("invalid CSV format")
-		}
-
-		id, err := strconv.Atoi(row[0])
-		if err != nil {
-			return nil, err
-		}
-
-		name := row[1]
-
-		value, err := strconv.ParseFloat(row[2], 64)
-		if err != nil {
-			return nil, err
-		}
-
-		records = append(records, DataRecord{
-			ID:    id,
-			Name:  name,
-			Value: value,
-		})
-	}
-
-	return records, nil
-}
-
-func ValidateRecords(records []DataRecord) error {
-	seenIDs := make(map[int]bool)
-	for _, record := range records {
-		if record.ID <= 0 {
-			return errors.New("invalid ID value")
-		}
-		if record.Name == "" {
-			return errors.New("name cannot be empty")
-		}
-		if record.Value < 0 {
-			return errors.New("value cannot be negative")
-		}
-		if seenIDs[record.ID] {
-			return errors.New("duplicate ID found")
-		}
-		seenIDs[record.ID] = true
-	}
-	return nil
+    fmt.Printf("Successfully processed %s to %s\n", inputFile, outputFile)
 }
