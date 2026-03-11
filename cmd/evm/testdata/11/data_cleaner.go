@@ -1,116 +1,54 @@
-package utils
+package main
 
 import (
-	"regexp"
+	"fmt"
 	"strings"
 )
 
-func SanitizeInput(input string) string {
-	// Remove leading and trailing whitespace
-	trimmed := strings.TrimSpace(input)
-	
-	// Replace multiple spaces with single space
-	re := regexp.MustCompile(`\s+`)
-	normalized := re.ReplaceAllString(trimmed, " ")
-	
-	// Remove potentially dangerous characters for SQL injection prevention
-	re = regexp.MustCompile(`[;'"\\]`)
-	cleaned := re.ReplaceAllString(normalized, "")
-	
-	return cleaned
+type DataRecord struct {
+	ID    int
+	Email string
+	Valid bool
 }
 
-func ValidateEmail(email string) bool {
-	// Simple email validation regex
-	emailRegex := regexp.MustCompile(`^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$`)
-	return emailRegex.MatchString(email)
-}
-package main
+func deduplicateEmails(records []DataRecord) []DataRecord {
+	seen := make(map[string]bool)
+	var unique []DataRecord
 
-import "fmt"
-
-func removeDuplicates(nums []int) []int {
-	seen := make(map[int]bool)
-	result := []int{}
-
-	for _, num := range nums {
-		if !seen[num] {
-			seen[num] = true
-			result = append(result, num)
+	for _, record := range records {
+		email := strings.ToLower(strings.TrimSpace(record.Email))
+		if !seen[email] {
+			seen[email] = true
+			record.Email = email
+			unique = append(unique, record)
 		}
 	}
-	return result
+	return unique
+}
+
+func validateEmailFormat(email string) bool {
+	return strings.Contains(email, "@") && strings.Contains(email, ".")
+}
+
+func cleanData(records []DataRecord) []DataRecord {
+	records = deduplicateEmails(records)
+	for i := range records {
+		records[i].Valid = validateEmailFormat(records[i].Email)
+	}
+	return records
 }
 
 func main() {
-	data := []int{1, 2, 2, 3, 4, 4, 5, 1, 6}
-	cleaned := removeDuplicates(data)
-	fmt.Println("Original:", data)
-	fmt.Println("Cleaned:", cleaned)
-}package main
+	sampleData := []DataRecord{
+		{1, "user@example.com", false},
+		{2, "USER@example.com", false},
+		{3, "invalid-email", false},
+		{4, "test@domain.org", false},
+	}
 
-import (
-    "encoding/csv"
-    "fmt"
-    "io"
-    "os"
-    "strings"
-)
-
-func cleanCSV(inputPath, outputPath string) error {
-    inFile, err := os.Open(inputPath)
-    if err != nil {
-        return fmt.Errorf("failed to open input file: %w", err)
-    }
-    defer inFile.Close()
-
-    outFile, err := os.Create(outputPath)
-    if err != nil {
-        return fmt.Errorf("failed to create output file: %w", err)
-    }
-    defer outFile.Close()
-
-    reader := csv.NewReader(inFile)
-    writer := csv.NewWriter(outFile)
-    defer writer.Flush()
-
-    for {
-        record, err := reader.Read()
-        if err == io.EOF {
-            break
-        }
-        if err != nil {
-            return fmt.Errorf("failed to read CSV record: %w", err)
-        }
-
-        cleanedRecord := make([]string, len(record))
-        for i, field := range record {
-            cleanedField := strings.TrimSpace(field)
-            cleanedField = strings.ToLower(cleanedField)
-            cleanedRecord[i] = cleanedField
-        }
-
-        if err := writer.Write(cleanedRecord); err != nil {
-            return fmt.Errorf("failed to write CSV record: %w", err)
-        }
-    }
-
-    return nil
-}
-
-func main() {
-    if len(os.Args) != 3 {
-        fmt.Println("Usage: go run data_cleaner.go <input.csv> <output.csv>")
-        os.Exit(1)
-    }
-
-    inputFile := os.Args[1]
-    outputFile := os.Args[2]
-
-    if err := cleanCSV(inputFile, outputFile); err != nil {
-        fmt.Printf("Error: %v\n", err)
-        os.Exit(1)
-    }
-
-    fmt.Printf("Successfully cleaned data from %s to %s\n", inputFile, outputFile)
+	cleaned := cleanData(sampleData)
+	fmt.Printf("Processed %d records\n", len(cleaned))
+	for _, r := range cleaned {
+		fmt.Printf("ID: %d, Email: %s, Valid: %v\n", r.ID, r.Email, r.Valid)
+	}
 }
