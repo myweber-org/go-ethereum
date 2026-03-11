@@ -49,4 +49,59 @@ func main() {
     
     fmt.Printf("Original data: %v\n", sampleData)
     fmt.Printf("Moving averages (window=%d): %v\n", window, averages)
+}package main
+
+import (
+	"errors"
+	"regexp"
+	"strings"
+)
+
+type UserData struct {
+	Email    string
+	Username string
+	Age      int
+}
+
+func ValidateUserData(data UserData) error {
+	if data.Email == "" {
+		return errors.New("email cannot be empty")
+	}
+	if !isValidEmail(data.Email) {
+		return errors.New("invalid email format")
+	}
+	if data.Username == "" {
+		return errors.New("username cannot be empty")
+	}
+	if len(data.Username) < 3 {
+		return errors.New("username must be at least 3 characters")
+	}
+	if data.Age < 0 || data.Age > 150 {
+		return errors.New("age must be between 0 and 150")
+	}
+	return nil
+}
+
+func isValidEmail(email string) bool {
+	pattern := `^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$`
+	matched, _ := regexp.MatchString(pattern, email)
+	return matched
+}
+
+func TransformUsername(username string) string {
+	return strings.ToLower(strings.TrimSpace(username))
+}
+
+func ProcessUserInput(email, username string, age int) (UserData, error) {
+	transformedUsername := TransformUsername(username)
+	userData := UserData{
+		Email:    email,
+		Username: transformedUsername,
+		Age:      age,
+	}
+	err := ValidateUserData(userData)
+	if err != nil {
+		return UserData{}, err
+	}
+	return userData, nil
 }
