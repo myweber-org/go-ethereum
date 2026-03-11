@@ -3,83 +3,39 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"regexp"
-	"strings"
+	"log"
 )
 
-type UserProfile struct {
-	ID        int    `json:"id"`
-	Username  string `json:"username"`
-	Email     string `json:"email"`
-	Age       int    `json:"age"`
-	Active    bool   `json:"active"`
-	Tags      []string `json:"tags"`
+type UserData struct {
+	ID    int    `json:"id"`
+	Name  string `json:"name"`
+	Email string `json:"email"`
 }
 
-func ValidateEmail(email string) bool {
-	emailRegex := regexp.MustCompile(`^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$`)
-	return emailRegex.MatchString(email)
-}
-
-func NormalizeUsername(username string) string {
-	return strings.ToLower(strings.TrimSpace(username))
-}
-
-func FilterInactiveUsers(users []UserProfile) []UserProfile {
-	var activeUsers []UserProfile
-	for _, user := range users {
-		if user.Active {
-			activeUsers = append(activeUsers, user)
-		}
+func ValidateAndParseJSON(rawData []byte) (*UserData, error) {
+	var data UserData
+	if err := json.Unmarshal(rawData, &data); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal JSON: %w", err)
 	}
-	return activeUsers
+
+	if data.ID <= 0 {
+		return nil, fmt.Errorf("invalid ID: must be positive integer")
+	}
+	if data.Name == "" {
+		return nil, fmt.Errorf("name cannot be empty")
+	}
+	if data.Email == "" {
+		return nil, fmt.Errorf("email cannot be empty")
+	}
+
+	return &data, nil
 }
 
-func TransformUserData(users []UserProfile) ([]map[string]interface{}, error) {
-	var transformed []map[string]interface{}
-	
-	for _, user := range users {
-		if !ValidateEmail(user.Email) {
-			return nil, fmt.Errorf("invalid email for user %d", user.ID)
-		}
-		
-		transformedUser := map[string]interface{}{
-			"user_id":   user.ID,
-			"username":  NormalizeUsername(user.Username),
-			"email":     strings.ToLower(user.Email),
-			"age_group": categorizeAge(user.Age),
-			"tag_count": len(user.Tags),
-			"metadata": map[string]interface{}{
-				"active": user.Active,
-				"tags":   user.Tags,
-			},
-		}
-		transformed = append(transformed, transformedUser)
+func main() {
+	jsonStr := `{"id": 123, "name": "John Doe", "email": "john@example.com"}`
+	parsedData, err := ValidateAndParseJSON([]byte(jsonStr))
+	if err != nil {
+		log.Fatalf("Error: %v", err)
 	}
-	
-	return transformed, nil
-}
-
-func categorizeAge(age int) string {
-	switch {
-	case age < 18:
-		return "minor"
-	case age >= 18 && age < 30:
-		return "young_adult"
-	case age >= 30 && age < 50:
-		return "adult"
-	default:
-		return "senior"
-	}
-}
-
-func ProcessUserJSON(jsonData []byte) ([]map[string]interface{}, error) {
-	var users []UserProfile
-	
-	if err := json.Unmarshal(jsonData, &users); err != nil {
-		return nil, fmt.Errorf("failed to parse JSON: %v", err)
-	}
-	
-	activeUsers := FilterInactiveUsers(users)
-	return TransformUserData(activeUsers)
+	fmt.Printf("Parsed data: %+v\n", parsedData)
 }
