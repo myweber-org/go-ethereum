@@ -68,4 +68,30 @@ func main() {
 	data := []string{"Apple", "apple ", " Banana", "banana", "Cherry"}
 	cleaned := cleaner.Clean(data)
 	fmt.Println("Cleaned data:", cleaned)
+}package main
+
+import (
+	"fmt"
+	"sort"
+)
+
+func CleanData(input []string) []string {
+	seen := make(map[string]struct{})
+	var result []string
+
+	for _, item := range input {
+		if _, exists := seen[item]; !exists {
+			seen[item] = struct{}{}
+			result = append(result, item)
+		}
+	}
+
+	sort.Strings(result)
+	return result
+}
+
+func main() {
+	data := []string{"zebra", "apple", "banana", "apple", "grape", "banana"}
+	cleaned := CleanData(data)
+	fmt.Println("Cleaned data:", cleaned)
 }
