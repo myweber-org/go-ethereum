@@ -205,4 +205,114 @@ func main() {
 
 	fmt.Printf("Generated encryption key: %x\n", key)
 	fmt.Println("Use this key for encryption/decryption operations")
+}package main
+
+import (
+    "crypto/aes"
+    "crypto/cipher"
+    "crypto/rand"
+    "encoding/base64"
+    "errors"
+    "fmt"
+    "io"
+    "os"
+)
+
+func encryptData(plaintext []byte, key []byte) (string, error) {
+    block, err := aes.NewCipher(key)
+    if err != nil {
+        return "", err
+    }
+
+    gcm, err := cipher.NewGCM(block)
+    if err != nil {
+        return "", err
+    }
+
+    nonce := make([]byte, gcm.NonceSize())
+    if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
+        return "", err
+    }
+
+    ciphertext := gcm.Seal(nonce, nonce, plaintext, nil)
+    return base64.StdEncoding.EncodeToString(ciphertext), nil
+}
+
+func decryptData(encrypted string, key []byte) ([]byte, error) {
+    data, err := base64.StdEncoding.DecodeString(encrypted)
+    if err != nil {
+        return nil, err
+    }
+
+    block, err := aes.NewCipher(key)
+    if err != nil {
+        return nil, err
+    }
+
+    gcm, err := cipher.NewGCM(block)
+    if err != nil {
+        return nil, err
+    }
+
+    nonceSize := gcm.NonceSize()
+    if len(data) < nonceSize {
+        return nil, errors.New("ciphertext too short")
+    }
+
+    nonce, ciphertext := data[:nonceSize], data[nonceSize:]
+    return gcm.Open(nil, nonce, ciphertext, nil)
+}
+
+func generateRandomKey() ([]byte, error) {
+    key := make([]byte, 32)
+    if _, err := rand.Read(key); err != nil {
+        return nil, err
+    }
+    return key, nil
+}
+
+func main() {
+    if len(os.Args) < 2 {
+        fmt.Println("Usage: go run file_encryptor.go <encrypt|decrypt>")
+        return
+    }
+
+    mode := os.Args[1]
+    key, _ := generateRandomKey()
+    sampleText := []byte("Confidential data requiring secure storage")
+
+    switch mode {
+    case "encrypt":
+        encrypted, err := encryptData(sampleText, key)
+        if err != nil {
+            fmt.Printf("Encryption failed: %v\n", err)
+            return
+        }
+        fmt.Printf("Encrypted: %s\n", encrypted)
+        fmt.Printf("Key (base64): %s\n", base64.StdEncoding.EncodeToString(key))
+
+    case "decrypt":
+        if len(os.Args) < 4 {
+            fmt.Println("Usage for decrypt: go run file_encryptor.go decrypt <encrypted_text> <base64_key>")
+            return
+        }
+        encryptedText := os.Args[2]
+        keyB64 := os.Args[3]
+
+        key, err := base64.StdEncoding.DecodeString(keyB64)
+        if err != nil {
+            fmt.Printf("Invalid key: %v\n", err)
+            return
+        }
+
+        decrypted, err := decryptData(encryptedText, key)
+        if err != nil {
+            fmt.Printf("Decryption failed: %v\n", err)
+            return
+        }
+        fmt.Printf("Decrypted: %s\n", decrypted)
+
+    default:
+        fmt.Println("Invalid mode. Use 'encrypt' or 'decrypt'")
+    }
 }
