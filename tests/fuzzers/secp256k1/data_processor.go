@@ -80,3 +80,54 @@ func ProcessRecords(records []DataRecord, multiplier float64) ([]DataRecord, err
 	}
 	return processed, nil
 }
+package main
+
+import (
+	"errors"
+	"strings"
+)
+
+type UserData struct {
+	ID    int
+	Name  string
+	Email string
+	Age   int
+}
+
+func ValidateUserData(data UserData) error {
+	if data.ID <= 0 {
+		return errors.New("invalid user ID")
+	}
+
+	if strings.TrimSpace(data.Name) == "" {
+		return errors.New("name cannot be empty")
+	}
+
+	if !strings.Contains(data.Email, "@") {
+		return errors.New("invalid email format")
+	}
+
+	if data.Age < 18 || data.Age > 120 {
+		return errors.New("age must be between 18 and 120")
+	}
+
+	return nil
+}
+
+func TransformUserData(data UserData) UserData {
+	return UserData{
+		ID:    data.ID,
+		Name:  strings.ToUpper(strings.TrimSpace(data.Name)),
+		Email: strings.ToLower(strings.TrimSpace(data.Email)),
+		Age:   data.Age,
+	}
+}
+
+func ProcessUserInput(rawData UserData) (UserData, error) {
+	if err := ValidateUserData(rawData); err != nil {
+		return UserData{}, err
+	}
+
+	processedData := TransformUserData(rawData)
+	return processedData, nil
+}
