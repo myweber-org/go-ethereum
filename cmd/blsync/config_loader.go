@@ -201,4 +201,99 @@ func validateConfig(config *AppConfig) error {
 	}
 
 	return nil
+}package config
+
+import (
+	"errors"
+	"os"
+	"path/filepath"
+
+	"gopkg.in/yaml.v3"
+)
+
+type Config struct {
+	Server struct {
+		Host string `yaml:"host" env:"SERVER_HOST"`
+		Port int    `yaml:"port" env:"SERVER_PORT"`
+	} `yaml:"server"`
+	Database struct {
+		Host     string `yaml:"host" env:"DB_HOST"`
+		Port     int    `yaml:"port" env:"DB_PORT"`
+		Name     string `yaml:"name" env:"DB_NAME"`
+		User     string `yaml:"user" env:"DB_USER"`
+		Password string `yaml:"password" env:"DB_PASSWORD"`
+	} `yaml:"database"`
+	LogLevel string `yaml:"log_level" env:"LOG_LEVEL"`
+}
+
+func LoadConfig(configPath string) (*Config, error) {
+	if configPath == "" {
+		configPath = "config.yaml"
+	}
+
+	absPath, err := filepath.Abs(configPath)
+	if err != nil {
+		return nil, err
+	}
+
+	data, err := os.ReadFile(absPath)
+	if err != nil {
+		return nil, err
+	}
+
+	var cfg Config
+	if err := yaml.Unmarshal(data, &cfg); err != nil {
+		return nil, err
+	}
+
+	if err := cfg.loadEnvVars(); err != nil {
+		return nil, err
+	}
+
+	return &cfg, nil
+}
+
+func (c *Config) loadEnvVars() error {
+	if val := os.Getenv("SERVER_HOST"); val != "" {
+		c.Server.Host = val
+	}
+	if val := os.Getenv("SERVER_PORT"); val != "" {
+		port, err := parseInt(val)
+		if err != nil {
+			return err
+		}
+		c.Server.Port = port
+	}
+	if val := os.Getenv("DB_HOST"); val != "" {
+		c.Database.Host = val
+	}
+	if val := os.Getenv("DB_PORT"); val != "" {
+		port, err := parseInt(val)
+		if err != nil {
+			return err
+		}
+		c.Database.Port = port
+	}
+	if val := os.Getenv("DB_NAME"); val != "" {
+		c.Database.Name = val
+	}
+	if val := os.Getenv("DB_USER"); val != "" {
+		c.Database.User = val
+	}
+	if val := os.Getenv("DB_PASSWORD"); val != "" {
+		c.Database.Password = val
+	}
+	if val := os.Getenv("LOG_LEVEL"); val != "" {
+		c.LogLevel = val
+	}
+	return nil
+}
+
+func parseInt(s string) (int, error) {
+	var n int
+	_, err := fmt.Sscanf(s, "%d", &n)
+	if err != nil {
+		return 0, errors.New("invalid integer value")
+	}
+	return n, nil
 }
