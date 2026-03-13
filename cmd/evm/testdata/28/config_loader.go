@@ -95,4 +95,56 @@ func validateConfig(cfg *Config) error {
 		return errors.New("database name cannot be empty")
 	}
 	return nil
+}package config
+
+import (
+	"os"
+	"strings"
+
+	"gopkg.in/yaml.v2"
+)
+
+type Config struct {
+	Server struct {
+		Port string `yaml:"port" env:"SERVER_PORT"`
+		Host string `yaml:"host" env:"SERVER_HOST"`
+	} `yaml:"server"`
+	Database struct {
+		URL      string `yaml:"url" env:"DB_URL"`
+		PoolSize int    `yaml:"pool_size" env:"DB_POOL_SIZE"`
+	} `yaml:"database"`
+	Cache struct {
+		Enabled bool   `yaml:"enabled" env:"CACHE_ENABLED"`
+		Address string `yaml:"address" env:"CACHE_ADDRESS"`
+	} `yaml:"cache"`
+}
+
+func LoadConfig(filePath string) (*Config, error) {
+	config := &Config{}
+
+	file, err := os.Open(filePath)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+
+	decoder := yaml.NewDecoder(file)
+	if err := decoder.Decode(config); err != nil {
+		return nil, err
+	}
+
+	overrideFromEnv(config)
+	return config, nil
+}
+
+func overrideFromEnv(config *Config) {
+	overrideStruct(config.Server)
+	overrideStruct(config.Database)
+	overrideStruct(config.Cache)
+}
+
+func overrideStruct(s interface{}) {
+	// Implementation would use reflection to check env tags
+	// and override values from environment variables
+	// Simplified placeholder implementation
 }
