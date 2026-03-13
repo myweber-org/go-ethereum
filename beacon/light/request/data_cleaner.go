@@ -1,24 +1,80 @@
-
 package main
 
-import "fmt"
+import (
+	"encoding/csv"
+	"fmt"
+	"io"
+	"os"
+	"strings"
+)
 
-func RemoveDuplicates(input []int) []int {
-	seen := make(map[int]bool)
-	result := []int{}
+func cleanCSVData(inputPath, outputPath string) error {
+	inFile, err := os.Open(inputPath)
+	if err != nil {
+		return fmt.Errorf("failed to open input file: %w", err)
+	}
+	defer inFile.Close()
 
-	for _, value := range input {
-		if !seen[value] {
-			seen[value] = true
-			result = append(result, value)
+	outFile, err := os.Create(outputPath)
+	if err != nil {
+		return fmt.Errorf("failed to create output file: %w", err)
+	}
+	defer outFile.Close()
+
+	reader := csv.NewReader(inFile)
+	writer := csv.NewWriter(outFile)
+	defer writer.Flush()
+
+	headers, err := reader.Read()
+	if err != nil {
+		return fmt.Errorf("failed to read headers: %w", err)
+	}
+
+	trimmedHeaders := make([]string, len(headers))
+	for i, h := range headers {
+		trimmedHeaders[i] = strings.TrimSpace(h)
+	}
+	if err := writer.Write(trimmedHeaders); err != nil {
+		return fmt.Errorf("failed to write headers: %w", err)
+	}
+
+	for {
+		record, err := reader.Read()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return fmt.Errorf("failed to read record: %w", err)
+		}
+
+		cleanedRecord := make([]string, len(record))
+		for i, field := range record {
+			cleanedField := strings.TrimSpace(field)
+			cleanedField = strings.ToLower(cleanedField)
+			cleanedRecord[i] = cleanedField
+		}
+
+		if err := writer.Write(cleanedRecord); err != nil {
+			return fmt.Errorf("failed to write record: %w", err)
 		}
 	}
-	return result
+
+	return nil
 }
 
 func main() {
-	numbers := []int{1, 2, 2, 3, 4, 4, 5, 6, 6, 7}
-	uniqueNumbers := RemoveDuplicates(numbers)
-	fmt.Println("Original:", numbers)
-	fmt.Println("Unique:", uniqueNumbers)
+	if len(os.Args) != 3 {
+		fmt.Println("Usage: go run data_cleaner.go <input.csv> <output.csv>")
+		os.Exit(1)
+	}
+
+	inputFile := os.Args[1]
+	outputFile := os.Args[2]
+
+	if err := cleanCSVData(inputFile, outputFile); err != nil {
+		fmt.Printf("Error: %v\n", err)
+		os.Exit(1)
+	}
+
+	fmt.Printf("Data cleaned successfully. Output saved to %s\n", outputFile)
 }
