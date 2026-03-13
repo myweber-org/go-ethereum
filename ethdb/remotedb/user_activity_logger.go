@@ -112,4 +112,65 @@ type responseRecorder struct {
 func (rr *responseRecorder) WriteHeader(code int) {
 	rr.statusCode = code
 	rr.ResponseWriter.WriteHeader(code)
+}package main
+
+import (
+    "encoding/json"
+    "fmt"
+    "log"
+    "os"
+    "time"
+)
+
+type ActivityLog struct {
+    Timestamp time.Time `json:"timestamp"`
+    UserID    string    `json:"user_id"`
+    Action    string    `json:"action"`
+    Details   string    `json:"details,omitempty"`
+}
+
+func NewActivityLog(userID, action, details string) *ActivityLog {
+    return &ActivityLog{
+        Timestamp: time.Now().UTC(),
+        UserID:    userID,
+        Action:    action,
+        Details:   details,
+    }
+}
+
+func (al *ActivityLog) ToJSON() ([]byte, error) {
+    return json.MarshalIndent(al, "", "  ")
+}
+
+func LogActivity(userID, action, details string) error {
+    logEntry := NewActivityLog(userID, action, details)
+    jsonData, err := logEntry.ToJSON()
+    if err != nil {
+        return fmt.Errorf("failed to marshal activity log: %w", err)
+    }
+
+    file, err := os.OpenFile("activity.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+    if err != nil {
+        return fmt.Errorf("failed to open log file: %w", err)
+    }
+    defer file.Close()
+
+    if _, err := file.Write(append(jsonData, '\n')); err != nil {
+        return fmt.Errorf("failed to write log entry: %w", err)
+    }
+
+    log.Printf("Activity logged: %s performed %s", userID, action)
+    return nil
+}
+
+func main() {
+    if err := LogActivity("user123", "login", "Successful authentication"); err != nil {
+        log.Fatalf("Failed to log activity: %v", err)
+    }
+
+    if err := LogActivity("user456", "file_upload", "Uploaded document.pdf"); err != nil {
+        log.Fatalf("Failed to log activity: %v", err)
+    }
+
+    fmt.Println("Activity logging completed")
 }
