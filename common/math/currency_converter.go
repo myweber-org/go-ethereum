@@ -97,4 +97,84 @@ func main() {
 
 	// Show supported currencies
 	fmt.Printf("\nSupported currencies: %v\n", converter.GetSupportedCurrencies())
+}package main
+
+import (
+	"fmt"
+	"math"
+)
+
+type Currency string
+
+const (
+	USD Currency = "USD"
+	EUR Currency = "EUR"
+	GBP Currency = "GBP"
+	JPY Currency = "JPY"
+)
+
+type ExchangeRates map[Currency]float64
+
+type CurrencyConverter struct {
+	rates ExchangeRates
+}
+
+func NewCurrencyConverter() *CurrencyConverter {
+	return &CurrencyConverter{
+		rates: ExchangeRates{
+			USD: 1.0,
+			EUR: 0.85,
+			GBP: 0.73,
+			JPY: 110.0,
+		},
+	}
+}
+
+func (c *CurrencyConverter) Convert(amount float64, from, to Currency) (float64, error) {
+	if amount < 0 {
+		return 0, fmt.Errorf("amount cannot be negative")
+	}
+
+	fromRate, fromExists := c.rates[from]
+	toRate, toExists := c.rates[to]
+
+	if !fromExists || !toExists {
+		return 0, fmt.Errorf("unsupported currency")
+	}
+
+	converted := (amount / fromRate) * toRate
+	return math.Round(converted*100) / 100, nil
+}
+
+func (c *CurrencyConverter) UpdateRate(currency Currency, rate float64) error {
+	if rate <= 0 {
+		return fmt.Errorf("exchange rate must be positive")
+	}
+	c.rates[currency] = rate
+	return nil
+}
+
+func (c *CurrencyConverter) GetSupportedCurrencies() []Currency {
+	currencies := make([]Currency, 0, len(c.rates))
+	for currency := range c.rates {
+		currencies = append(currencies, currency)
+	}
+	return currencies
+}
+
+func main() {
+	converter := NewCurrencyConverter()
+
+	amount := 100.0
+	result, err := converter.Convert(amount, USD, EUR)
+	if err != nil {
+		fmt.Printf("Conversion error: %v\n", err)
+		return
+	}
+	fmt.Printf("%.2f %s = %.2f %s\n", amount, USD, result, EUR)
+
+	fmt.Println("Supported currencies:")
+	for _, currency := range converter.GetSupportedCurrencies() {
+		fmt.Printf("- %s\n", currency)
+	}
 }
