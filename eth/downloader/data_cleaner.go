@@ -128,3 +128,50 @@ func main() {
 
     fmt.Printf("Successfully cleaned data from %s to %s\n", inputFile, outputFile)
 }
+package main
+
+import (
+	"fmt"
+	"sort"
+)
+
+type DataCleaner struct {
+	entries []string
+}
+
+func NewDataCleaner(data []string) *DataCleaner {
+	return &DataCleaner{entries: data}
+}
+
+func (dc *DataCleaner) RemoveDuplicates() {
+	seen := make(map[string]bool)
+	result := []string{}
+	for _, entry := range dc.entries {
+		if !seen[entry] {
+			seen[entry] = true
+			result = append(result, entry)
+		}
+	}
+	dc.entries = result
+}
+
+func (dc *DataCleaner) SortAlphabetically() {
+	sort.Strings(dc.entries)
+}
+
+func (dc *DataCleaner) GetEntries() []string {
+	return dc.entries
+}
+
+func main() {
+	rawData := []string{"zebra", "apple", "orange", "apple", "banana", "orange"}
+	cleaner := NewDataCleaner(rawData)
+	
+	fmt.Println("Original data:", rawData)
+	
+	cleaner.RemoveDuplicates()
+	fmt.Println("After removing duplicates:", cleaner.GetEntries())
+	
+	cleaner.SortAlphabetically()
+	fmt.Println("After sorting:", cleaner.GetEntries())
+}
