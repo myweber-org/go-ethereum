@@ -272,4 +272,99 @@ func getEnvIntOrDefault(key string, defaultValue int) int {
 		}
 	}
 	return defaultValue
+}package config
+
+import (
+    "fmt"
+    "os"
+    "strings"
+)
+
+type Config struct {
+    DatabaseURL string
+    APIKey      string
+    DebugMode   bool
+    Port        int
+}
+
+func LoadConfig(filePath string) (*Config, error) {
+    config := &Config{
+        DatabaseURL: getEnvOrDefault("DB_URL", "localhost:5432"),
+        APIKey:      getEnvOrDefault("API_KEY", ""),
+        DebugMode:   getEnvBool("DEBUG", false),
+        Port:        getEnvInt("PORT", 8080),
+    }
+
+    if filePath != "" {
+        err := parseConfigFile(filePath, config)
+        if err != nil {
+            return nil, fmt.Errorf("failed to parse config file: %w", err)
+        }
+    }
+
+    return config, nil
+}
+
+func getEnvOrDefault(key, defaultValue string) string {
+    if value := os.Getenv(key); value != "" {
+        return value
+    }
+    return defaultValue
+}
+
+func getEnvBool(key string, defaultValue bool) bool {
+    value := os.Getenv(key)
+    switch strings.ToLower(value) {
+    case "true", "1", "yes":
+        return true
+    case "false", "0", "no":
+        return false
+    default:
+        return defaultValue
+    }
+}
+
+func getEnvInt(key string, defaultValue int) int {
+    value := os.Getenv(key)
+    var result int
+    if _, err := fmt.Sscanf(value, "%d", &result); err != nil {
+        return defaultValue
+    }
+    return result
+}
+
+func parseConfigFile(filePath string, config *Config) error {
+    data, err := os.ReadFile(filePath)
+    if err != nil {
+        return err
+    }
+
+    lines := strings.Split(string(data), "\n")
+    for _, line := range lines {
+        line = strings.TrimSpace(line)
+        if line == "" || strings.HasPrefix(line, "#") {
+            continue
+        }
+
+        parts := strings.SplitN(line, "=", 2)
+        if len(parts) != 2 {
+            continue
+        }
+
+        key := strings.TrimSpace(parts[0])
+        value := strings.TrimSpace(parts[1])
+
+        switch key {
+        case "DATABASE_URL":
+            config.DatabaseURL = value
+        case "API_KEY":
+            config.APIKey = value
+        case "DEBUG":
+            config.DebugMode = strings.ToLower(value) == "true"
+        case "PORT":
+            fmt.Sscanf(value, "%d", &config.Port)
+        }
+    }
+
+    return nil
 }
