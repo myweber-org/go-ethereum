@@ -81,3 +81,32 @@ func main() {
 	processed := processRecords(records)
 	fmt.Printf("Valid records: %d\n", len(processed))
 }
+package main
+
+import (
+	"regexp"
+	"strings"
+)
+
+func SanitizeCSVField(input string) string {
+	if input == "" {
+		return input
+	}
+
+	// Remove leading/trailing whitespace
+	trimmed := strings.TrimSpace(input)
+
+	// Remove any double quotes that could break CSV formatting
+	trimmed = strings.ReplaceAll(trimmed, "\"", "'")
+
+	// Remove newlines and carriage returns
+	re := regexp.MustCompile(`[\r\n]+`)
+	trimmed = re.ReplaceAllString(trimmed, " ")
+
+	// Escape commas only if they're not already properly quoted
+	if strings.Contains(trimmed, ",") && !strings.HasPrefix(trimmed, "\"") {
+		trimmed = "\"" + trimmed + "\""
+	}
+
+	return trimmed
+}
